@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#d9e8ff">
+  <title>Pixel Home</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="blue">
+  <a class="skip-link" href="#searchInput">検索へ移動</a>
+
+  <div class="wallpaper" aria-hidden="true">
+    <span class="wallpaper-shape shape-one"></span>
+    <span class="wallpaper-shape shape-two"></span>
+    <span class="wallpaper-shape shape-three"></span>
+  </div>
+
+  <div class="app-shell">
+    <header class="top-bar">
+      <div class="today-label" id="todayLabel">今日</div>
+      <div class="top-actions">
+        <button class="round-button" id="editButton" type="button" aria-pressed="false" aria-label="ホーム画面を編集">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15.5V20h4.5L19.8 8.7l-4.5-4.5L4 15.5Zm14.7-9.7-1.5 1.5-1.5-1.5 1.5-1.5a1.06 1.06 0 0 1 1.5 0l.1.1a1 1 0 0 1-.1 1.4Z"/></svg>
+        </button>
+        <button class="round-button" id="settingsButton" type="button" aria-label="設定を開く">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.8 7.8 0 0 0 .1-1 7.8 7.8 0 0 0-.1-1l2-1.6-2-3.4-2.5 1a8 8 0 0 0-1.7-1L15 3.3h-4L10.6 6a8 8 0 0 0-1.7 1L6.4 6l-2 3.4 2 1.6a7.8 7.8 0 0 0-.1 1 7.8 7.8 0 0 0 .1 1l-2 1.6 2 3.4 2.5-1a8 8 0 0 0 1.7 1l.4 2.7h4l.4-2.7a8 8 0 0 0 1.7-1l2.5 1 2-3.4-2.2-1.6ZM13 15.4a3.5 3.5 0 1 1 0-6.9 3.5 3.5 0 0 1 0 6.9Z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="search-section" aria-label="Google検索">
+        <form class="search-box" id="searchForm" autocomplete="off">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m20.5 19-4.7-4.7a7 7 0 1 0-1.5 1.5l4.7 4.7 1.5-1.5ZM5.5 10.5a5 5 0 1 1 10 0 5 5 0 0 1-10 0Z"/></svg>
+          <input id="searchInput" name="q" type="search" placeholder="Google で検索" aria-label="Googleで検索" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false">
+          <button class="search-submit" type="submit" aria-label="検索する">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6 1.4-1.4 7.4 7.4-7.4 7.4L9 18Z"/></svg>
+          </button>
+        </form>
+        <div class="suggestions" id="suggestions" role="listbox" aria-label="検索候補" hidden></div>
+      </section>
+
+      <section class="home-grid" id="homeGrid" aria-label="ホーム画面">
+        <article class="home-item widget clock-widget span-four" data-key="clock">
+          <div class="drag-handle" aria-hidden="true"><span></span></div>
+          <div class="widget-actions">
+            <button class="mini-button hide-widget" type="button" data-widget="clock" aria-label="時計を非表示">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
+            </button>
+          </div>
+          <div class="digital-clock" id="digitalClock">
+            <time class="clock-time" id="clockTime">--:--</time>
+            <div class="clock-date" id="clockDate">--</div>
+          </div>
+          <div class="analog-clock" id="analogClock" aria-label="アナログ時計" hidden>
+            <span class="clock-mark mark-12">12</span>
+            <span class="clock-mark mark-3">3</span>
+            <span class="clock-mark mark-6">6</span>
+            <span class="clock-mark mark-9">9</span>
+            <span class="clock-hand hour-hand" id="hourHand"></span>
+            <span class="clock-hand minute-hand" id="minuteHand"></span>
+            <span class="clock-hand second-hand" id="secondHand"></span>
+            <span class="clock-pin"></span>
+          </div>
+        </article>
+
+        <article class="home-item widget timetable-widget span-eight" data-key="timetable">
+          <div class="drag-handle" aria-hidden="true"><span></span></div>
+          <div class="widget-actions">
+            <button class="mini-button hide-widget" type="button" data-widget="timetable" aria-label="時間割を非表示">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
+            </button>
+          </div>
+          <div class="timetable-header">
+            <div>
+              <p class="eyebrow">SCHOOL</p>
+              <h1>時間割</h1>
+              <p class="timetable-meta" id="timetableMeta">読み込み中...</p>
+            </div>
+            <button class="mini-button refresh-button" id="refreshTimetable" type="button" aria-label="時間割を再読み込み">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.6 6.4A8 8 0 1 0 20 15h-2.2a6 6 0 1 1-.7-6.8L14 11.3h7V4.2l-2.4 2.2Z"/></svg>
+            </button>
+          </div>
+          <div class="day-switch" role="group" aria-label="表示する日">
+            <button type="button" data-day-offset="0">今日</button>
+            <button type="button" data-day-offset="1">明日</button>
+          </div>
+          <div class="timetable-content" id="timetableContent" aria-live="polite">
+            <div class="timetable-loading"><span></span><span></span><span></span></div>
+          </div>
+        </article>
+      </section>
+
+      <p class="edit-hint" id="editHint" hidden>アイコンやウィジェットをドラッグして並べ替えられます</p>
+    </main>
+  </div>
+
+  <dialog class="sheet" id="settingsDialog">
+    <form method="dialog" class="sheet-panel" id="settingsForm">
+      <header class="sheet-header">
+        <div>
+          <p class="eyebrow">PERSONALIZE</p>
+          <h2>ホーム画面の設定</h2>
+        </div>
+        <button class="round-button" value="close" aria-label="設定を閉じる">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
+        </button>
+      </header>
+
+      <section class="settings-section">
+        <h3>カラーテーマ</h3>
+        <div class="theme-options" role="radiogroup" aria-label="カラーテーマ">
+          <label class="theme-choice blue"><input type="radio" name="theme" value="blue"><span>ブルー</span></label>
+          <label class="theme-choice green"><input type="radio" name="theme" value="green"><span>グリーン</span></label>
+          <label class="theme-choice violet"><input type="radio" name="theme" value="violet"><span>バイオレット</span></label>
+          <label class="theme-choice coral"><input type="radio" name="theme" value="coral"><span>コーラル</span></label>
+          <label class="theme-choice dark"><input type="radio" name="theme" value="dark"><span>ダーク</span></label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="setting-row">
+          <div><h3>時計</h3><p>ホーム画面に時計を表示します</p></div>
+          <label class="switch"><input type="checkbox" id="clockEnabled"><span></span></label>
+        </div>
+        <label class="field-label" for="clockType">時計の種類</label>
+        <select id="clockType">
+          <option value="digital">デジタル</option>
+          <option value="analog">アナログ</option>
+        </select>
+        <div class="setting-row compact">
+          <div><h3>24時間表示</h3><p>デジタル時計に適用します</p></div>
+          <label class="switch"><input type="checkbox" id="clock24Hour"><span></span></label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="setting-row">
+          <div><h3>時間割</h3><p>Firebaseから最新データを取得します</p></div>
+          <label class="switch"><input type="checkbox" id="timetableEnabled"><span></span></label>
+        </div>
+        <div class="two-fields">
+          <div>
+            <label class="field-label" for="classSelect">クラス</label>
+            <select id="classSelect"></select>
+          </div>
+          <div>
+            <label class="field-label" for="switchTime">明日へ切り替える時刻</label>
+            <input id="switchTime" type="time" step="1800">
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section danger-zone">
+        <button class="text-button" id="resetButton" type="button">配置と設定を初期状態に戻す</button>
+      </section>
+    </form>
+  </dialog>
+
+  <dialog class="sheet compact-sheet" id="shortcutDialog">
+    <form class="sheet-panel" id="shortcutForm">
+      <header class="sheet-header">
+        <div>
+          <p class="eyebrow">SHORTCUT</p>
+          <h2 id="shortcutDialogTitle">ショートカットを追加</h2>
+        </div>
+        <button class="round-button" id="closeShortcutDialog" type="button" aria-label="閉じる">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
+        </button>
+      </header>
+      <label class="field-label" for="shortcutName">表示名</label>
+      <input id="shortcutName" maxlength="24" required placeholder="例：Classroom">
+      <label class="field-label" for="shortcutUrl">URL</label>
+      <input id="shortcutUrl" type="text" inputmode="url" required placeholder="https://classroom.google.com/">
+      <label class="field-label" for="shortcutColor">アイコンの色</label>
+      <input id="shortcutColor" type="color" value="#0b57d0">
+      <div class="dialog-actions">
+        <button class="secondary-button" id="deleteShortcut" type="button" hidden>削除</button>
+        <span></span>
+        <button class="secondary-button" id="cancelShortcut" type="button">キャンセル</button>
+        <button class="primary-button" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
