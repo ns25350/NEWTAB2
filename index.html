@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#8fb8ee">
   <title>Home Grid</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="features.css">
 </head>
 <body data-theme="silver">
   <a class="skip-link" href="#searchInput">検索へ移動</a>
@@ -23,19 +24,21 @@
     </button>
   </nav>
 
-  <main class="home-stage">
+  <main class="home-stage" id="homeStage">
     <section class="os-grid" id="homeGrid" aria-label="ホーム画面のグリッド">
+      <div class="grid-ghost" id="gridGhost" hidden aria-hidden="true"></div>
+
       <article class="grid-item search-item" data-key="search">
         <div class="item-edit-chrome">
+          <button class="item-remove" type="button" data-hide-widget="search" aria-label="検索を非表示">−</button>
+          <button class="page-move" type="button" data-send-next-page="search" aria-label="検索を次のページへ">›</button>
           <button class="drag-grip" type="button" aria-label="検索を移動"><span></span></button>
           <span class="size-badge">—</span>
         </div>
         <form class="search-box" id="searchForm" autocomplete="off">
           <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m20.2 18.8-4.3-4.3a7.1 7.1 0 1 0-1.4 1.4l4.3 4.3 1.4-1.4ZM5.3 10.4a5.1 5.1 0 1 1 10.2 0 5.1 5.1 0 0 1-10.2 0Z"/></svg>
-          <input id="searchInput" name="q" type="search" placeholder="Googleで検索" aria-label="Googleで検索" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false">
-          <button class="search-submit" type="submit" aria-label="検索する">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6 1.4-1.4 7.4 7.4-7.4 7.4L9 18Z"/></svg>
-          </button>
+          <input id="searchInput" name="q" type="search" placeholder="検索またはショートカット" aria-label="検索" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false">
+          <button class="search-submit" type="submit" aria-label="検索する"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6 1.4-1.4 7.4 7.4-7.4 7.4L9 18Z"/></svg></button>
         </form>
         <div class="suggestions" id="suggestions" role="listbox" aria-label="検索候補" hidden></div>
         <button class="resize-handle" type="button" aria-label="検索の大きさを変更"><span></span></button>
@@ -44,6 +47,7 @@
       <article class="grid-item widget clock-widget" data-key="clock">
         <div class="item-edit-chrome">
           <button class="item-remove" type="button" data-hide-widget="clock" aria-label="時計を非表示">−</button>
+          <button class="page-move" type="button" data-send-next-page="clock" aria-label="時計を次のページへ">›</button>
           <button class="drag-grip" type="button" aria-label="時計を移動"><span></span></button>
           <span class="size-badge">—</span>
         </div>
@@ -54,10 +58,7 @@
         <div class="clock-content analog-wrap" id="analogClock" hidden>
           <div class="analog-clock" aria-label="アナログ時計">
             <span class="clock-dot dot-12"></span><span class="clock-dot dot-3"></span><span class="clock-dot dot-6"></span><span class="clock-dot dot-9"></span>
-            <span class="clock-hand hour-hand" id="hourHand"></span>
-            <span class="clock-hand minute-hand" id="minuteHand"></span>
-            <span class="clock-hand second-hand" id="secondHand"></span>
-            <span class="clock-pin"></span>
+            <span class="clock-hand hour-hand" id="hourHand"></span><span class="clock-hand minute-hand" id="minuteHand"></span><span class="clock-hand second-hand" id="secondHand"></span><span class="clock-pin"></span>
           </div>
           <div class="analog-date" id="analogDate">--</div>
         </div>
@@ -67,111 +68,146 @@
       <article class="grid-item widget timetable-widget" data-key="timetable">
         <div class="item-edit-chrome">
           <button class="item-remove" type="button" data-hide-widget="timetable" aria-label="時間割を非表示">−</button>
+          <button class="page-move" type="button" data-send-next-page="timetable" aria-label="時間割を次のページへ">›</button>
           <button class="drag-grip" type="button" aria-label="時間割を移動"><span></span></button>
           <span class="size-badge">—</span>
         </div>
         <header class="timetable-header">
-          <div class="timetable-title">
-            <span class="widget-kicker">SCHEDULE</span>
-            <h1>時間割</h1>
-            <p id="timetableMeta">読み込み中...</p>
-          </div>
+          <div class="timetable-title"><span class="widget-kicker">SCHEDULE</span><h1>時間割</h1><p id="timetableMeta">読み込み中...</p></div>
           <div class="timetable-actions">
-            <div class="day-switch" role="group" aria-label="表示する日">
-              <button type="button" data-day-offset="0">今日</button>
-              <button type="button" data-day-offset="1">明日</button>
-            </div>
-            <button class="widget-icon-button" id="refreshTimetable" type="button" aria-label="時間割を更新">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.6 6.4A8 8 0 1 0 20 15h-2.2a6 6 0 1 1-.7-6.8L14 11.3h7V4.2l-2.4 2.2Z"/></svg>
-            </button>
+            <div class="day-switch" role="group" aria-label="表示する日"><button type="button" data-day-offset="0">今日</button><button type="button" data-day-offset="1">明日</button></div>
+            <button class="widget-icon-button" id="refreshTimetable" type="button" aria-label="時間割を更新"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.6 6.4A8 8 0 1 0 20 15h-2.2a6 6 0 1 1-.7-6.8L14 11.3h7V4.2l-2.4 2.2Z"/></svg></button>
           </div>
         </header>
-        <div class="timetable-content" id="timetableContent" aria-live="polite">
-          <div class="timetable-loading"><span></span><span></span><span></span></div>
-        </div>
+        <div class="lesson-now" id="lessonNow" hidden></div>
+        <div class="timetable-content" id="timetableContent" aria-live="polite"><div class="timetable-loading"><span></span><span></span><span></span></div></div>
         <button class="resize-handle" type="button" aria-label="時間割の大きさを変更"><span></span></button>
+      </article>
+
+      <article class="grid-item widget weather-widget" data-key="weather">
+        <div class="item-edit-chrome">
+          <button class="item-remove" type="button" data-hide-widget="weather" aria-label="天気を非表示">−</button>
+          <button class="page-move" type="button" data-send-next-page="weather" aria-label="天気を次のページへ">›</button>
+          <button class="drag-grip" type="button" aria-label="天気を移動"><span></span></button>
+          <span class="size-badge">—</span>
+        </div>
+        <header class="weather-header"><div><span class="widget-kicker">WEATHER</span><h2 id="weatherLocation">金沢</h2></div><button class="widget-icon-button" id="refreshWeather" type="button" aria-label="天気を更新"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.6 6.4A8 8 0 1 0 20 15h-2.2a6 6 0 1 1-.7-6.8L14 11.3h7V4.2l-2.4 2.2Z"/></svg></button></header>
+        <div class="weather-content" id="weatherContent" aria-live="polite"><div class="timetable-loading"><span></span><span></span><span></span></div></div>
+        <button class="resize-handle" type="button" aria-label="天気の大きさを変更"><span></span></button>
+      </article>
+
+      <article class="grid-item widget agenda-widget" data-key="agenda">
+        <div class="item-edit-chrome">
+          <button class="item-remove" type="button" data-hide-widget="agenda" aria-label="予定を非表示">−</button>
+          <button class="page-move" type="button" data-send-next-page="agenda" aria-label="予定を次のページへ">›</button>
+          <button class="drag-grip" type="button" aria-label="予定を移動"><span></span></button>
+          <span class="size-badge">—</span>
+        </div>
+        <header class="agenda-header"><div><span class="widget-kicker">UPCOMING</span><h2>学校予定</h2></div><button class="widget-icon-button" id="openAgendaSettings" type="button" aria-label="予定を追加">＋</button></header>
+        <div class="agenda-content" id="agendaContent"></div>
+        <button class="resize-handle" type="button" aria-label="予定の大きさを変更"><span></span></button>
       </article>
     </section>
   </main>
 
-  <div class="edit-guide" id="editGuide" hidden>
-    <span>ドラッグで移動</span><i></i><span>右下をドラッグしてサイズ変更</span>
-  </div>
+  <nav class="page-navigation" id="pageNavigation" aria-label="ホーム画面のページ">
+    <button id="previousPage" type="button" aria-label="前のページ">‹</button><div class="page-dots" id="pageDots"></div><button id="nextPage" type="button" aria-label="次のページ">›</button>
+  </nav>
+
+  <div class="edit-toolbar" id="editToolbar" hidden><button id="undoButton" type="button" disabled>↶ 元に戻す</button><span>重ねるとフォルダ</span></div>
+  <div class="edit-guide" id="editGuide" hidden><span>ドラッグで移動</span><i></i><span>右下でサイズ変更</span><i></i><span>› で次ページ</span></div>
 
   <dialog class="sheet settings-sheet" id="settingsDialog">
     <form class="sheet-panel" id="settingsForm">
-      <header class="sheet-header">
-        <div><span class="sheet-kicker">HOME SCREEN</span><h2>設定</h2></div>
-        <button class="close-button" id="closeSettings" type="button" aria-label="設定を閉じる">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
-        </button>
-      </header>
+      <header class="sheet-header"><div><span class="sheet-kicker">HOME SCREEN</span><h2>設定</h2></div><button class="close-button" id="closeSettings" type="button" aria-label="設定を閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg></button></header>
 
-      <section class="settings-card">
-        <div class="section-title"><div><h3>グリッド</h3><p>少ない項目なら大きく、多い場合は細かくできます。</p></div></div>
-        <div class="preset-control" id="gridPresets">
-          <button type="button" data-grid-preset="large">大きめ</button>
-          <button type="button" data-grid-preset="standard">標準</button>
-          <button type="button" data-grid-preset="compact">細かめ</button>
-        </div>
-        <label class="range-row" for="gridColumns"><span>横のマス数</span><output id="gridColumnsValue">12</output></label>
-        <input class="range-input" id="gridColumns" type="range" min="6" max="16" step="1">
-        <label class="range-row" for="gridRowHeight"><span>マスの高さ</span><output id="gridRowHeightValue">78 px</output></label>
-        <input class="range-input" id="gridRowHeight" type="range" min="56" max="112" step="2">
-        <label class="range-row" for="gridGap"><span>間隔</span><output id="gridGapValue">14 px</output></label>
-        <input class="range-input" id="gridGap" type="range" min="8" max="24" step="1">
+      <section class="settings-card" id="gridSettingsSection">
+        <div class="section-title"><div><h3>グリッドと配置</h3><p>マスの密度とホーム画面の構成を変更します。</p></div></div>
+        <div class="preset-control" id="gridPresets"><button type="button" data-grid-preset="large">大きめ</button><button type="button" data-grid-preset="standard">標準</button><button type="button" data-grid-preset="compact">細かめ</button></div>
+        <label class="range-row" for="gridColumns"><span>横のマス数</span><output id="gridColumnsValue">12</output></label><input class="range-input" id="gridColumns" type="range" min="6" max="16" step="1">
+        <label class="range-row" for="gridRowHeight"><span>マスの高さ</span><output id="gridRowHeightValue">78 px</output></label><input class="range-input" id="gridRowHeight" type="range" min="56" max="112" step="2">
+        <label class="range-row" for="gridGap"><span>間隔</span><output id="gridGapValue">14 px</output></label><input class="range-input" id="gridGap" type="range" min="8" max="24" step="1">
+        <h4 class="subheading">配置テンプレート</h4>
+        <div class="template-grid" id="layoutTemplates"><button type="button" data-layout-template="study">勉強向け</button><button type="button" data-layout-template="shortcuts">アイコン重視</button><button type="button" data-layout-template="simple">シンプル</button></div>
       </section>
 
       <section class="settings-card">
-        <div class="section-title"><div><h3>壁紙と外観</h3><p>画像はこの端末のブラウザ内に保存されます。</p></div></div>
-        <div class="wallpaper-actions">
-          <label class="primary-action" for="wallpaperInput">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5"/></svg>
-            画像を選ぶ
-          </label>
-          <input id="wallpaperInput" type="file" accept="image/*" hidden>
-          <button class="secondary-action" id="removeWallpaper" type="button">壁紙を削除</button>
+        <div class="section-title"><div><h3>ホーム画面のページ</h3><p>横スワイプや左右ボタンで切り替えます。</p></div></div>
+        <div class="compact-form"><input id="newPageName" maxlength="18" placeholder="ページ名"><button class="primary-action" id="addPageButton" type="button">追加</button></div>
+        <div class="manage-list" id="pageManager"></div>
+      </section>
+
+      <section class="settings-card">
+        <div class="section-title"><div><h3>壁紙と全体の外観</h3><p>画像はこの端末のブラウザ内に保存されます。</p></div></div>
+        <div class="wallpaper-actions"><label class="primary-action" for="wallpaperInput">画像を選ぶ</label><input id="wallpaperInput" type="file" accept="image/*" hidden><button class="secondary-action" id="removeWallpaper" type="button">壁紙を削除</button></div>
+        <div class="setting-row"><div><h4>壁紙から色を自動生成</h4><p>画像の明るさと代表色を使用。</p></div><label class="switch"><input type="checkbox" id="autoTheme"><span></span></label></div>
+        <fieldset class="manual-themes" id="manualThemes"><legend>手動テーマ</legend><label class="theme-choice silver"><input type="radio" name="manualTheme" value="silver"><span></span><small>Silver</small></label><label class="theme-choice ocean"><input type="radio" name="manualTheme" value="ocean"><span></span><small>Ocean</small></label><label class="theme-choice rose"><input type="radio" name="manualTheme" value="rose"><span></span><small>Rose</small></label><label class="theme-choice graphite"><input type="radio" name="manualTheme" value="graphite"><span></span><small>Dark</small></label></fieldset>
+        <label class="range-row" for="widgetOpacity"><span>標準の透明度</span><output id="widgetOpacityValue">82%</output></label><input class="range-input" id="widgetOpacity" type="range" min="52" max="96" step="1">
+        <label class="range-row" for="wallpaperShade"><span>壁紙の暗さ</span><output id="wallpaperShadeValue">18%</output></label><input class="range-input" id="wallpaperShade" type="range" min="0" max="55" step="1">
+      </section>
+
+      <section class="settings-card">
+        <div class="section-title"><div><h3>ウィジェット</h3><p>表示する機能と内容を設定します。</p></div></div>
+        <div class="toggle-grid">
+          <label><span>検索</span><span class="switch"><input type="checkbox" id="searchEnabled"><span></span></span></label>
+          <label><span>時計</span><span class="switch"><input type="checkbox" id="clockEnabled"><span></span></span></label>
+          <label><span>時間割</span><span class="switch"><input type="checkbox" id="timetableEnabled"><span></span></span></label>
+          <label><span>天気</span><span class="switch"><input type="checkbox" id="weatherEnabled"><span></span></span></label>
+          <label><span>学校予定</span><span class="switch"><input type="checkbox" id="agendaEnabled"><span></span></span></label>
         </div>
-        <div class="setting-row">
-          <div><h4>壁紙から色を自動生成</h4><p>画像の明るさと代表色を使います。</p></div>
-          <label class="switch"><input type="checkbox" id="autoTheme"><span></span></label>
-        </div>
-        <fieldset class="manual-themes" id="manualThemes">
-          <legend>手動テーマ</legend>
-          <label class="theme-choice silver"><input type="radio" name="manualTheme" value="silver"><span></span><small>Silver</small></label>
-          <label class="theme-choice ocean"><input type="radio" name="manualTheme" value="ocean"><span></span><small>Ocean</small></label>
-          <label class="theme-choice rose"><input type="radio" name="manualTheme" value="rose"><span></span><small>Rose</small></label>
-          <label class="theme-choice graphite"><input type="radio" name="manualTheme" value="graphite"><span></span><small>Dark</small></label>
+        <div class="two-fields"><div><label class="select-label" for="clockType">時計の種類</label><select id="clockType"><option value="digital">デジタル</option><option value="analog">アナログ</option></select></div><div class="setting-row inline-switch"><div><h4>24時間表示</h4></div><label class="switch"><input type="checkbox" id="clock24Hour"><span></span></label></div></div>
+      </section>
+
+      <section class="settings-card">
+        <div class="section-title"><div><h3>時間割と授業時刻</h3><p>現在・次の授業判定に使用します。</p></div></div>
+        <div class="two-fields"><div><label class="select-label" for="classSelect">クラス</label><select id="classSelect"></select></div><div><label class="select-label" for="switchTime">明日へ切り替える時刻</label><input id="switchTime" type="time" step="1800"></div></div>
+        <label class="select-label" for="lessonPreset">授業時間</label>
+        <select id="lessonPreset"><option value="50">50分授業</option><option value="45">45分授業</option><option value="custom">その他・自分で設定</option></select>
+        <div class="period-editor" id="periodEditor"></div>
+        <button class="secondary-action full-action" id="copyPresetToCustom" type="button">この時刻を「その他」にコピー</button>
+      </section>
+
+      <section class="settings-card" id="weatherSettingsSection">
+        <div class="section-title"><div><h3>天気</h3><p>地域名または現在地から取得します。</p></div></div>
+        <div class="compact-form"><input id="weatherLocationInput" placeholder="例：金沢市"><button class="primary-action" id="searchWeatherLocation" type="button">地域を設定</button></div>
+        <button class="secondary-action full-action" id="useCurrentLocation" type="button">現在地を使用</button>
+        <p class="setting-status" id="weatherSettingStatus"></p>
+      </section>
+
+      <section class="settings-card">
+        <div class="section-title"><div><h3>検索</h3><p>ショートカット検索と短縮コマンドに対応します。</p></div></div>
+        <label class="select-label" for="searchEngine">標準の検索エンジン</label><select id="searchEngine"><option value="google">Google</option><option value="bing">Bing</option><option value="duckduckgo">DuckDuckGo</option><option value="youtube">YouTube</option><option value="maps">Googleマップ</option></select>
+        <div class="setting-row"><div><h4>検索履歴を端末に保存</h4><p>オフの場合は検索語を記録しません。</p></div><label class="switch"><input type="checkbox" id="saveSearchHistory"><span></span></label></div>
+        <p class="command-help"><code>yt</code> YouTube　<code>map</code> マップ　<code>ddg</code> DuckDuckGo　<code>g</code> Google</p>
+        <button class="secondary-action full-action" id="clearSearchHistory" type="button">検索履歴を消去</button>
+      </section>
+
+      <section class="settings-card" id="agendaSettingsSection">
+        <div class="section-title"><div><h3>学校予定・カウントダウン</h3><p>テスト、提出、行事などを登録できます。</p></div></div>
+        <input id="agendaTitle" maxlength="32" placeholder="予定名">
+        <div class="compact-form"><input id="agendaDate" type="date"><button class="primary-action" id="addAgendaItem" type="button">追加</button></div>
+        <div class="manage-list" id="agendaManager"></div>
+      </section>
+
+      <section class="settings-card">
+        <div class="section-title"><div><h3>ウィジェットごとの外観</h3><p>標準テーマから個別に上書きできます。</p></div></div>
+        <label class="select-label" for="styleTarget">対象</label><select id="styleTarget"><option value="search">検索</option><option value="clock">時計</option><option value="timetable">時間割</option><option value="weather">天気</option><option value="agenda">学校予定</option></select>
+        <div class="setting-row"><div><h4>個別設定を使用</h4></div><label class="switch"><input type="checkbox" id="customStyleEnabled"><span></span></label></div>
+        <fieldset id="customStyleControls">
+          <label class="range-row" for="customOpacity"><span>透明度</span><output id="customOpacityValue">82%</output></label><input class="range-input" id="customOpacity" type="range" min="35" max="100">
+          <label class="range-row" for="customBlur"><span>ぼかし</span><output id="customBlurValue">28 px</output></label><input class="range-input" id="customBlur" type="range" min="0" max="48">
+          <label class="range-row" for="customRadius"><span>角丸</span><output id="customRadiusValue">27 px</output></label><input class="range-input" id="customRadius" type="range" min="8" max="42">
+          <label class="range-row" for="customShadow"><span>シャドウ</span><output id="customShadowValue">55%</output></label><input class="range-input" id="customShadow" type="range" min="0" max="100">
+          <div class="color-fields"><label>文字色<input id="customTextColor" type="color"></label><label>アクセント<input id="customAccentColor" type="color"></label></div>
         </fieldset>
-        <label class="range-row" for="widgetOpacity"><span>ウィジェットの透明度</span><output id="widgetOpacityValue">82%</output></label>
-        <input class="range-input" id="widgetOpacity" type="range" min="52" max="96" step="1">
-        <label class="range-row" for="wallpaperShade"><span>壁紙の暗さ</span><output id="wallpaperShadeValue">18%</output></label>
-        <input class="range-input" id="wallpaperShade" type="range" min="0" max="55" step="1">
+        <button class="secondary-action full-action" id="resetCustomStyle" type="button">このウィジェットを標準に戻す</button>
       </section>
 
       <section class="settings-card">
-        <div class="setting-row first-row">
-          <div><h3>検索</h3><p>Google検索ウィジェットを表示します。</p></div>
-          <label class="switch"><input type="checkbox" id="searchEnabled"><span></span></label>
-        </div>
-        <div class="setting-row">
-          <div><h3>時計</h3><p>デジタルまたはアナログ表示。</p></div>
-          <label class="switch"><input type="checkbox" id="clockEnabled"><span></span></label>
-        </div>
-        <label class="select-label" for="clockType">時計の種類</label>
-        <select id="clockType"><option value="digital">デジタル</option><option value="analog">アナログ</option></select>
-        <div class="setting-row">
-          <div><h4>24時間表示</h4><p>デジタル時計に適用します。</p></div>
-          <label class="switch"><input type="checkbox" id="clock24Hour"><span></span></label>
-        </div>
-        <div class="setting-row">
-          <div><h3>時間割</h3><p>Firebaseから時間割を取得します。</p></div>
-          <label class="switch"><input type="checkbox" id="timetableEnabled"><span></span></label>
-        </div>
-        <div class="two-fields">
-          <div><label class="select-label" for="classSelect">クラス</label><select id="classSelect"></select></div>
-          <div><label class="select-label" for="switchTime">明日へ切り替える時刻</label><input id="switchTime" type="time" step="1800"></div>
-        </div>
+        <div class="section-title"><div><h3>配置の保存と移行</h3><p>名前付き保存やJSONでの移行ができます。</p></div></div>
+        <div class="compact-form"><input id="layoutName" maxlength="24" placeholder="配置名"><button class="primary-action" id="saveNamedLayout" type="button">保存</button></div>
+        <div class="manage-list" id="savedLayoutManager"></div>
+        <div class="split-actions"><button class="secondary-action" id="exportSettings" type="button">JSONを書き出す</button><label class="secondary-action file-action" for="importSettings">JSONを読み込む</label><input id="importSettings" type="file" accept="application/json,.json" hidden></div>
       </section>
 
       <button class="reset-action" id="resetButton" type="button">ホーム画面を初期状態に戻す</button>
@@ -180,24 +216,20 @@
 
   <dialog class="sheet shortcut-sheet" id="shortcutDialog">
     <form class="sheet-panel" id="shortcutForm">
-      <header class="sheet-header">
-        <div><span class="sheet-kicker">APP ICON</span><h2 id="shortcutDialogTitle">ショートカットを追加</h2></div>
-        <button class="close-button" id="closeShortcutDialog" type="button" aria-label="閉じる">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
-        </button>
-      </header>
-      <label class="select-label" for="shortcutName">表示名</label>
-      <input id="shortcutName" maxlength="24" required placeholder="例：Classroom">
-      <label class="select-label" for="shortcutUrl">URL</label>
-      <input id="shortcutUrl" type="text" inputmode="url" required placeholder="https://classroom.google.com/">
-      <label class="select-label" for="shortcutColor">アイコンの色</label>
-      <input id="shortcutColor" type="color" value="#3478f6">
-      <div class="dialog-actions">
-        <button class="delete-action" id="deleteShortcut" type="button" hidden>削除</button>
-        <span></span>
-        <button class="secondary-action" id="cancelShortcut" type="button">キャンセル</button>
-        <button class="primary-action" type="submit">保存</button>
-      </div>
+      <header class="sheet-header"><div><span class="sheet-kicker">APP ICON</span><h2 id="shortcutDialogTitle">ショートカットを追加</h2></div><button class="close-button" id="closeShortcutDialog" type="button" aria-label="閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg></button></header>
+      <label class="select-label" for="shortcutName">表示名</label><input id="shortcutName" maxlength="24" required placeholder="例：Classroom">
+      <label class="select-label" for="shortcutUrl">URL</label><input id="shortcutUrl" type="text" inputmode="url" required placeholder="https://classroom.google.com/">
+      <div class="two-fields"><div><label class="select-label" for="shortcutColor">アイコンの色</label><input id="shortcutColor" type="color" value="#3478f6"></div><div><label class="select-label" for="shortcutFolder">フォルダ</label><select id="shortcutFolder"><option value="">ホーム画面</option></select></div></div>
+      <div class="dialog-actions"><button class="delete-action" id="deleteShortcut" type="button" hidden>削除</button><span></span><button class="secondary-action" id="cancelShortcut" type="button">キャンセル</button><button class="primary-action" type="submit">保存</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="sheet folder-sheet" id="folderDialog">
+    <form class="sheet-panel" id="folderForm">
+      <header class="sheet-header"><div><span class="sheet-kicker">FOLDER</span><h2>フォルダ</h2></div><button class="close-button" id="closeFolderDialog" type="button" aria-label="閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg></button></header>
+      <label class="select-label" for="folderName">フォルダ名</label><input id="folderName" maxlength="24">
+      <p class="drag-note">項目をドラッグして並べ替えられます。</p><div class="folder-dialog-items" id="folderDialogItems"></div>
+      <div class="dialog-actions"><button class="delete-action" id="deleteFolder" type="button">フォルダを解除</button><span></span><button class="primary-action" id="saveFolder" type="submit">保存</button></div>
     </form>
   </dialog>
 

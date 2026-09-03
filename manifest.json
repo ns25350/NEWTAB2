@@ -1,12 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Home Grid New Tab",
-  "version": "0.2.0",
-  "description": "iOS風の自由なグリッド、背景連動テーマ、時間割を備えた新しいタブページです。",
+  "version": "0.3.0",
+  "description": "時間割、天気、学校予定、フォルダ、複数ページを自由に配置できるiOS風の新しいタブページです。",
+  "permissions": [
+    "geolocation"
+  ],
   "host_permissions": [
     "https://suggestqueries.google.com/*",
     "https://www.google.com/complete/search*",
-    "https://johou7-275be-default-rtdb.firebaseio.com/*"
+    "https://johou7-275be-default-rtdb.firebaseio.com/*",
+    "https://api.open-meteo.com/*",
+    "https://geocoding-api.open-meteo.com/*"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"
