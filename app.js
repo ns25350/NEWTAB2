@@ -1,8 +1,11 @@
 "use strict";
 
 const FIREBASE_URL = "https://johou7-275be-default-rtdb.firebaseio.com/timetable.json";
-const STORAGE_KEY = "pixelHomeStateV1";
-const TIMETABLE_CACHE_KEY = "pixelHomeTimetableCacheV1";
+const STATE_KEY = "homeGridStateV2";
+const LEGACY_STATE_KEY = "pixelHomeStateV1";
+const TIMETABLE_CACHE_KEY = "homeGridTimetableCacheV2";
+const WALLPAPER_DB = "home-grid-assets";
+const WALLPAPER_STORE = "wallpaper";
 
 const CLASS_LIST = [
   "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
@@ -12,41 +15,25 @@ const CLASS_LIST = [
 
 const DEFAULT_SHORTCUTS = [
   { id: "google", name: "Google", url: "https://www.google.com/", color: "#4285f4" },
-  { id: "youtube", name: "YouTube", url: "https://www.youtube.com/", color: "#d93025" },
-  { id: "classroom", name: "Classroom", url: "https://classroom.google.com/", color: "#1e8e3e" },
-  { id: "drive", name: "Drive", url: "https://drive.google.com/", color: "#f9ab00" }
+  { id: "youtube", name: "YouTube", url: "https://www.youtube.com/", color: "#e23b32" },
+  { id: "classroom", name: "Classroom", url: "https://classroom.google.com/", color: "#28a15b" },
+  { id: "drive", name: "Drive", url: "https://drive.google.com/", color: "#f2aa18" }
 ];
 
-const defaultState = () => ({
-  theme: "blue",
-  clock: { enabled: true, type: "digital", is24Hour: true },
-  timetable: { enabled: true, className: "101", switchTime: "16:00" },
-  shortcuts: DEFAULT_SHORTCUTS.map((shortcut) => ({ ...shortcut })),
-  order: ["clock", "timetable", ...DEFAULT_SHORTCUTS.map((item) => `shortcut:${item.id}`)]
-});
-
-let state = loadState();
-let isEditing = false;
-let timetableData = null;
-let selectedDayOffset = getInitialDayOffset();
-let timetableDayManuallySelected = false;
-let searchSuggestions = [];
-let activeSuggestionIndex = -1;
-let suggestionTimer = 0;
-let suggestionRequest = null;
-let clockTimer = 0;
-let toastTimer = 0;
-let draggedItem = null;
-let dragGhost = null;
-let dragPointerId = null;
+const GRID_PRESETS = {
+  large: { columns: 8, rowHeight: 96, gap: 16 },
+  standard: { columns: 12, rowHeight: 78, gap: 14 },
+  compact: { columns: 16, rowHeight: 62, gap: 10 }
+};
 
 const elements = {
   body: document.body,
-  todayLabel: document.getElementById("todayLabel"),
+  wallpaperLayer: document.getElementById("wallpaperLayer"),
   editButton: document.getElementById("editButton"),
+  editButtonLabel: document.getElementById("editButtonLabel"),
   settingsButton: document.getElementById("settingsButton"),
+  editGuide: document.getElementById("editGuide"),
   homeGrid: document.getElementById("homeGrid"),
-  editHint: document.getElementById("editHint"),
   searchForm: document.getElementById("searchForm"),
   searchInput: document.getElementById("searchInput"),
   suggestions: document.getElementById("suggestions"),
@@ -54,6 +41,7 @@ const elements = {
   analogClock: document.getElementById("analogClock"),
   clockTime: document.getElementById("clockTime"),
   clockDate: document.getElementById("clockDate"),
+  analogDate: document.getElementById("analogDate"),
   hourHand: document.getElementById("hourHand"),
   minuteHand: document.getElementById("minuteHand"),
   secondHand: document.getElementById("secondHand"),
@@ -62,6 +50,23 @@ const elements = {
   refreshTimetable: document.getElementById("refreshTimetable"),
   settingsDialog: document.getElementById("settingsDialog"),
   settingsForm: document.getElementById("settingsForm"),
+  closeSettings: document.getElementById("closeSettings"),
+  gridPresets: document.getElementById("gridPresets"),
+  gridColumns: document.getElementById("gridColumns"),
+  gridColumnsValue: document.getElementById("gridColumnsValue"),
+  gridRowHeight: document.getElementById("gridRowHeight"),
+  gridRowHeightValue: document.getElementById("gridRowHeightValue"),
+  gridGap: document.getElementById("gridGap"),
+  gridGapValue: document.getElementById("gridGapValue"),
+  wallpaperInput: document.getElementById("wallpaperInput"),
+  removeWallpaper: document.getElementById("removeWallpaper"),
+  autoTheme: document.getElementById("autoTheme"),
+  manualThemes: document.getElementById("manualThemes"),
+  widgetOpacity: document.getElementById("widgetOpacity"),
+  widgetOpacityValue: document.getElementById("widgetOpacityValue"),
+  wallpaperShade: document.getElementById("wallpaperShade"),
+  wallpaperShadeValue: document.getElementById("wallpaperShadeValue"),
+  searchEnabled: document.getElementById("searchEnabled"),
   clockEnabled: document.getElementById("clockEnabled"),
   clockType: document.getElementById("clockType"),
   clock24Hour: document.getElementById("clock24Hour"),
@@ -81,252 +86,815 @@ const elements = {
   toast: document.getElementById("toast")
 };
 
+let state = loadState();
+let isEditing = false;
+let dragSession = null;
+let suppressShortcutClickUntil = 0;
+let wallpaperObjectUrl = "";
+let timetableData = null;
+let selectedDayOffset = getAutomaticDayOffset();
+let timetableDayWasSelected = false;
+let clockTimer = 0;
+let toastTimer = 0;
+let searchSuggestions = [];
+let activeSuggestionIndex = -1;
+let suggestionTimer = 0;
+let suggestionRequest = null;
+
 initialize();
 
-function initialize() {
+async function initialize() {
   populateClassSelect();
+  ensureLayoutEntries();
+  settleLayout();
   bindEvents();
-  applyState();
+  applyGridSettings();
+  applyAppearance();
+  renderHome();
+  syncSettingsControls();
   updateClock();
   startClock();
   fetchTimetable();
+  await loadWallpaper();
+}
+
+function createDefaultState() {
+  return {
+    version: 2,
+    grid: { ...GRID_PRESETS.standard },
+    appearance: {
+      autoTheme: true,
+      manualTheme: "silver",
+      widgetOpacity: 82,
+      wallpaperShade: 18,
+      autoPalette: null,
+      hasWallpaper: false
+    },
+    search: { enabled: true },
+    clock: { enabled: true, type: "digital", is24Hour: true },
+    timetable: { enabled: true, className: "101", switchTime: "16:00" },
+    shortcuts: DEFAULT_SHORTCUTS.map((item) => ({ ...item })),
+    order: ["clock", "search", "timetable", ...DEFAULT_SHORTCUTS.map((item) => shortcutKey(item.id))],
+    layout: {
+      clock: { x: 0, y: 0, w: 4, h: 3 },
+      search: { x: 4, y: 0, w: 8, h: 1 },
+      timetable: { x: 4, y: 1, w: 8, h: 3 },
+      [shortcutKey("google")]: { x: 0, y: 3, w: 2, h: 2 },
+      [shortcutKey("youtube")]: { x: 2, y: 3, w: 2, h: 2 },
+      [shortcutKey("classroom")]: { x: 0, y: 5, w: 2, h: 2 },
+      [shortcutKey("drive")]: { x: 2, y: 5, w: 2, h: 2 }
+    }
+  };
 }
 
 function loadState() {
+  const defaults = createDefaultState();
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (!stored || typeof stored !== "object") return defaultState();
+    const stored = JSON.parse(localStorage.getItem(STATE_KEY));
+    if (stored?.version === 2) return mergeWithDefaults(stored, defaults);
 
-    const defaults = defaultState();
-    const shortcuts = Array.isArray(stored.shortcuts)
-      ? stored.shortcuts.filter(isValidStoredShortcut).map((item) => ({ ...item }))
-      : defaults.shortcuts;
-    const validTokens = new Set(["clock", "timetable", ...shortcuts.map((item) => `shortcut:${item.id}`)]);
-    const savedOrder = Array.isArray(stored.order) ? stored.order.filter((token) => validTokens.has(token)) : [];
-    validTokens.forEach((token) => { if (!savedOrder.includes(token)) savedOrder.push(token); });
-
-    return {
-      theme: ["blue", "green", "violet", "coral", "dark"].includes(stored.theme) ? stored.theme : defaults.theme,
-      clock: { ...defaults.clock, ...(stored.clock || {}) },
-      timetable: { ...defaults.timetable, ...(stored.timetable || {}) },
-      shortcuts,
-      order: savedOrder
-    };
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_STATE_KEY));
+    if (legacy && typeof legacy === "object") {
+      defaults.appearance.manualTheme = mapLegacyTheme(legacy.theme);
+      defaults.appearance.autoTheme = false;
+      defaults.clock = { ...defaults.clock, ...(legacy.clock || {}) };
+      defaults.timetable = { ...defaults.timetable, ...(legacy.timetable || {}) };
+      if (Array.isArray(legacy.shortcuts)) {
+        defaults.shortcuts = legacy.shortcuts.filter(isStoredShortcut).map((item) => ({ ...item }));
+        defaults.order = ["clock", "search", "timetable", ...defaults.shortcuts.map((item) => shortcutKey(item.id))];
+      }
+      return defaults;
+    }
   } catch (error) {
-    console.warn("設定を読み込めなかったため、初期設定を使用します。", error);
-    return defaultState();
+    console.warn("設定の読み込みに失敗しました。", error);
   }
+  return defaults;
 }
 
-function isValidStoredShortcut(item) {
+function mergeWithDefaults(stored, defaults) {
+  const shortcuts = Array.isArray(stored.shortcuts)
+    ? stored.shortcuts.filter(isStoredShortcut).map((item) => ({ ...item }))
+    : defaults.shortcuts;
+  const validKeys = new Set(["search", "clock", "timetable", ...shortcuts.map((item) => shortcutKey(item.id))]);
+  const order = Array.isArray(stored.order) ? stored.order.filter((key) => validKeys.has(key)) : [];
+  validKeys.forEach((key) => { if (!order.includes(key)) order.push(key); });
+
+  return {
+    version: 2,
+    grid: {
+      columns: clampNumber(stored.grid?.columns, 6, 16, defaults.grid.columns),
+      rowHeight: clampNumber(stored.grid?.rowHeight, 56, 112, defaults.grid.rowHeight),
+      gap: clampNumber(stored.grid?.gap, 8, 24, defaults.grid.gap)
+    },
+    appearance: { ...defaults.appearance, ...(stored.appearance || {}) },
+    search: { ...defaults.search, ...(stored.search || {}) },
+    clock: { ...defaults.clock, ...(stored.clock || {}) },
+    timetable: { ...defaults.timetable, ...(stored.timetable || {}) },
+    shortcuts,
+    order,
+    layout: stored.layout && typeof stored.layout === "object" ? structuredClone(stored.layout) : structuredClone(defaults.layout)
+  };
+}
+
+function mapLegacyTheme(theme) {
+  return ({ blue: "silver", green: "ocean", violet: "rose", coral: "rose", dark: "graphite" })[theme] || "silver";
+}
+
+function isStoredShortcut(item) {
   return item && typeof item.id === "string" && typeof item.name === "string" && typeof item.url === "string";
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
 }
 
-function applyState() {
-  elements.body.dataset.theme = state.theme;
-  document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.body).getPropertyValue("--bg").trim();
+function saveState() {
+  localStorage.setItem(STATE_KEY, JSON.stringify(state));
+}
 
-  const clockWidget = elements.homeGrid.querySelector('[data-key="clock"]');
-  const timetableWidget = elements.homeGrid.querySelector('[data-key="timetable"]');
-  clockWidget.hidden = !state.clock.enabled;
-  timetableWidget.hidden = !state.timetable.enabled;
+function shortcutKey(id) {
+  return `shortcut:${id}`;
+}
 
-  elements.digitalClock.hidden = state.clock.type !== "digital";
-  elements.analogClock.hidden = state.clock.type !== "analog";
-  renderShortcuts();
-  applySavedOrder();
+function itemKind(key) {
+  return key.startsWith("shortcut:") ? "shortcut" : key;
+}
+
+function visibleKeys() {
+  return state.order.filter((key) => {
+    if (key === "search") return state.search.enabled;
+    if (key === "clock") return state.clock.enabled;
+    if (key === "timetable") return state.timetable.enabled;
+    return key.startsWith("shortcut:") && state.shortcuts.some((item) => shortcutKey(item.id) === key);
+  });
+}
+
+function limitsFor(key) {
+  const columns = state.grid.columns;
+  const kind = itemKind(key);
+  if (kind === "search") return { minW: Math.min(4, columns), maxW: columns, minH: 1, maxH: 2 };
+  if (kind === "clock") return { minW: Math.min(2, columns), maxW: columns, minH: 2, maxH: 6 };
+  if (kind === "timetable") return { minW: Math.min(4, columns), maxW: columns, minH: 2, maxH: 6 };
+  return { minW: 1, maxW: Math.min(4, columns), minH: 1, maxH: 4 };
+}
+
+function defaultRectFor(key) {
+  const columns = state.grid.columns;
+  const kind = itemKind(key);
+  if (kind === "clock") return { x: 0, y: 0, w: Math.max(2, Math.round(columns / 3)), h: 3 };
+  if (kind === "search") {
+    const clockWidth = Math.max(2, Math.round(columns / 3));
+    return { x: clockWidth, y: 0, w: columns - clockWidth, h: 1 };
+  }
+  if (kind === "timetable") {
+    const clockWidth = Math.max(2, Math.round(columns / 3));
+    return { x: clockWidth, y: 1, w: columns - clockWidth, h: 3 };
+  }
+  return findOpenRect(Math.min(2, columns), 2);
+}
+
+function ensureLayoutEntries() {
+  state.order.forEach((key) => {
+    if (!state.layout[key]) state.layout[key] = defaultRectFor(key);
+    state.layout[key] = clampRect(key, state.layout[key]);
+  });
+}
+
+function clampRect(key, input) {
+  const limits = limitsFor(key);
+  const w = Math.min(state.grid.columns, clampNumber(input?.w, limits.minW, limits.maxW, limits.minW));
+  const h = clampNumber(input?.h, limits.minH, limits.maxH, limits.minH);
+  return {
+    x: clampNumber(input?.x, 0, Math.max(0, state.grid.columns - w), 0),
+    y: Math.max(0, Math.round(Number(input?.y) || 0)),
+    w: Math.round(w),
+    h: Math.round(h)
+  };
+}
+
+function overlaps(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function findRectAgainst(width, height, placed, startY = 0) {
+  const w = Math.min(width, state.grid.columns);
+  for (let y = Math.max(0, startY); y < 120; y += 1) {
+    for (let x = 0; x <= state.grid.columns - w; x += 1) {
+      const candidate = { x, y, w, h: height };
+      if (!placed.some((rect) => overlaps(candidate, rect))) return candidate;
+    }
+  }
+  return { x: 0, y: 120, w, h: height };
+}
+
+function findOpenRect(width, height, ignoreKey = "", startY = 0) {
+  const placed = visibleKeys()
+    .filter((key) => key !== ignoreKey && state.layout[key])
+    .map((key) => state.layout[key]);
+  return findRectAgainst(width, height, placed, startY);
+}
+
+function settleLayout(activeKey = "") {
+  ensureLayoutEntries();
+  const keys = visibleKeys();
+  keys.sort((a, b) => {
+    if (a === activeKey) return -1;
+    if (b === activeKey) return 1;
+    const first = state.layout[a];
+    const second = state.layout[b];
+    return first.y - second.y || first.x - second.x || state.order.indexOf(a) - state.order.indexOf(b);
+  });
+
+  const placed = [];
+  keys.forEach((key) => {
+    let rect = clampRect(key, state.layout[key]);
+    if (placed.some((other) => overlaps(rect, other))) rect = findRectAgainst(rect.w, rect.h, placed, rect.y);
+    state.layout[key] = rect;
+    placed.push(rect);
+  });
+}
+
+function changeColumnCount(nextColumns) {
+  const oldColumns = state.grid.columns;
+  const columns = clampNumber(nextColumns, 6, 16, oldColumns);
+  if (columns === oldColumns) return;
+  const ratio = columns / oldColumns;
+  state.grid.columns = columns;
+  Object.entries(state.layout).forEach(([key, rect]) => {
+    state.layout[key] = clampRect(key, {
+      ...rect,
+      x: Math.round(rect.x * ratio),
+      w: Math.max(1, Math.round(rect.w * ratio))
+    });
+  });
+  ensureLayoutEntries();
+  settleLayout();
+}
+
+function applyGridPreset(name) {
+  const preset = GRID_PRESETS[name];
+  if (!preset) return;
+  changeColumnCount(preset.columns);
+  state.grid.rowHeight = preset.rowHeight;
+  state.grid.gap = preset.gap;
+  settleLayout();
+  saveState();
+  applyGridSettings();
+  renderHome();
   syncSettingsControls();
-  updateClock();
-  renderTimetable();
+  showToast(`グリッドを「${name === "large" ? "大きめ" : name === "compact" ? "細かめ" : "標準"}」に変更しました`);
+}
+
+function applyGridSettings() {
+  const root = document.documentElement.style;
+  root.setProperty("--grid-cols", String(state.grid.columns));
+  root.setProperty("--grid-row", `${state.grid.rowHeight}px`);
+  root.setProperty("--grid-gap", `${state.grid.gap}px`);
+}
+
+function renderHome() {
+  elements.homeGrid.querySelectorAll(".shortcut-item").forEach((item) => item.remove());
+  const coreVisibility = { search: state.search.enabled, clock: state.clock.enabled, timetable: state.timetable.enabled };
+  Object.entries(coreVisibility).forEach(([key, visible]) => {
+    const item = elements.homeGrid.querySelector(`[data-key="${key}"]`);
+    if (item) item.hidden = !visible;
+  });
+
+  state.shortcuts.forEach((shortcut) => elements.homeGrid.appendChild(createShortcutElement(shortcut)));
+  if (isEditing) elements.homeGrid.appendChild(createAddShortcutElement());
+  applyAllPositions();
+  elements.body.classList.toggle("editing", isEditing);
+  elements.editButton.setAttribute("aria-pressed", String(isEditing));
+  elements.editButtonLabel.textContent = isEditing ? "完了" : "編集";
+  elements.editGuide.hidden = !isEditing;
+}
+
+function createShortcutElement(shortcut) {
+  const item = document.createElement("article");
+  item.className = "grid-item shortcut-item";
+  item.dataset.key = shortcutKey(shortcut.id);
+  item.innerHTML = `
+    <div class="shortcut-actions">
+      <button class="shortcut-delete" type="button" aria-label="${escapeHtml(shortcut.name)}を削除">−</button>
+      <button class="shortcut-edit" type="button" aria-label="${escapeHtml(shortcut.name)}を編集">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15.5V20h4.5L19.8 8.7l-4.5-4.5L4 15.5Z"/></svg>
+      </button>
+    </div>
+    <button class="shortcut-link" type="button" aria-label="${escapeHtml(shortcut.name)}を開く">
+      <span class="shortcut-icon" style="--shortcut-color:${safeColor(shortcut.color)}">
+        <span class="shortcut-initial">${escapeHtml(firstCharacter(shortcut.name))}</span>
+        <img src="${faviconUrl(shortcut.url)}" alt="">
+      </span>
+      <span class="shortcut-name">${escapeHtml(shortcut.name)}</span>
+    </button>
+    <button class="resize-handle" type="button" aria-label="${escapeHtml(shortcut.name)}の大きさを変更"><span></span></button>`;
+
+  const image = item.querySelector("img");
+  image.addEventListener("error", () => image.remove(), { once: true });
+  item.querySelector(".shortcut-link").addEventListener("click", () => {
+    if (!isEditing && Date.now() > suppressShortcutClickUntil) window.location.href = shortcut.url;
+  });
+  item.querySelector(".shortcut-edit").addEventListener("click", () => openShortcutDialog(shortcut.id));
+  item.querySelector(".shortcut-delete").addEventListener("click", () => deleteShortcut(shortcut.id));
+  return item;
+}
+
+function createAddShortcutElement() {
+  const item = document.createElement("article");
+  item.className = "grid-item shortcut-item add-shortcut";
+  item.dataset.key = "add-shortcut";
+  item.innerHTML = '<button class="shortcut-link" type="button" aria-label="ショートカットを追加"><span class="shortcut-icon"><span class="plus">＋</span></span><span class="shortcut-name">追加</span></button>';
+  item.querySelector("button").addEventListener("click", () => openShortcutDialog());
+  return item;
+}
+
+function applyAllPositions() {
+  visibleKeys().forEach((key) => {
+    const item = elements.homeGrid.querySelector(`[data-key="${cssEscape(key)}"]`);
+    if (item) positionElement(item, key, state.layout[key]);
+  });
+
+  const addItem = elements.homeGrid.querySelector('[data-key="add-shortcut"]');
+  if (addItem) positionElement(addItem, "add-shortcut", findOpenRect(Math.min(2, state.grid.columns), 2));
+}
+
+function positionElement(item, key, rect) {
+  if (!rect) return;
+  item.style.gridColumn = `${rect.x + 1} / span ${rect.w}`;
+  item.style.gridRow = `${rect.y + 1} / span ${rect.h}`;
+  item.dataset.gridWidth = String(rect.w);
+  item.dataset.gridHeight = String(rect.h);
+  const badge = item.querySelector(".size-badge");
+  if (badge) badge.textContent = `${rect.w} × ${rect.h}`;
+}
+
+function cssEscape(value) {
+  return typeof CSS !== "undefined" && CSS.escape ? CSS.escape(value) : value.replaceAll(":", "\\:");
 }
 
 function bindEvents() {
   elements.editButton.addEventListener("click", toggleEditMode);
-  elements.settingsButton.addEventListener("click", () => elements.settingsDialog.showModal());
+  elements.settingsButton.addEventListener("click", () => {
+    syncSettingsControls();
+    elements.settingsDialog.showModal();
+  });
+  elements.closeSettings.addEventListener("click", () => elements.settingsDialog.close());
+  bindBackdropClose(elements.settingsDialog);
+  bindBackdropClose(elements.shortcutDialog);
+
+  elements.homeGrid.addEventListener("pointerdown", beginGridDrag);
+  document.addEventListener("pointermove", updateGridDrag);
+  document.addEventListener("pointerup", finishGridDrag);
+  document.addEventListener("pointercancel", finishGridDrag);
+  document.querySelectorAll("[data-hide-widget]").forEach((button) => {
+    button.addEventListener("click", () => hideWidget(button.dataset.hideWidget));
+  });
+
+  elements.gridPresets.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-grid-preset]");
+    if (button) applyGridPreset(button.dataset.gridPreset);
+  });
+  elements.gridColumns.addEventListener("input", () => {
+    changeColumnCount(elements.gridColumns.value);
+    saveState();
+    applyGridSettings();
+    renderHome();
+    syncSettingsControls();
+  });
+  elements.gridRowHeight.addEventListener("input", () => {
+    state.grid.rowHeight = Number(elements.gridRowHeight.value);
+    saveState(); applyGridSettings(); syncSettingsControls();
+  });
+  elements.gridGap.addEventListener("input", () => {
+    state.grid.gap = Number(elements.gridGap.value);
+    saveState(); applyGridSettings(); syncSettingsControls();
+  });
+
+  elements.wallpaperInput.addEventListener("change", handleWallpaperUpload);
+  elements.removeWallpaper.addEventListener("click", removeWallpaper);
+  elements.autoTheme.addEventListener("change", () => {
+    state.appearance.autoTheme = elements.autoTheme.checked;
+    saveState(); applyAppearance(); syncSettingsControls();
+  });
+  elements.manualThemes.addEventListener("change", (event) => {
+    if (event.target.name !== "manualTheme") return;
+    state.appearance.manualTheme = event.target.value;
+    state.appearance.autoTheme = false;
+    saveState(); applyAppearance(); syncSettingsControls();
+  });
+  elements.widgetOpacity.addEventListener("input", () => {
+    state.appearance.widgetOpacity = Number(elements.widgetOpacity.value);
+    saveState(); applyAppearance(); syncSettingsControls();
+  });
+  elements.wallpaperShade.addEventListener("input", () => {
+    state.appearance.wallpaperShade = Number(elements.wallpaperShade.value);
+    saveState(); applyAppearance(); syncSettingsControls();
+  });
+
+  elements.searchEnabled.addEventListener("change", () => setWidgetEnabled("search", elements.searchEnabled.checked));
+  elements.clockEnabled.addEventListener("change", () => setWidgetEnabled("clock", elements.clockEnabled.checked));
+  elements.timetableEnabled.addEventListener("change", () => setWidgetEnabled("timetable", elements.timetableEnabled.checked));
+  elements.clockType.addEventListener("change", () => {
+    state.clock.type = elements.clockType.value;
+    saveState(); updateClockMode();
+  });
+  elements.clock24Hour.addEventListener("change", () => {
+    state.clock.is24Hour = elements.clock24Hour.checked;
+    saveState(); updateClock();
+  });
+  elements.classSelect.addEventListener("change", () => {
+    state.timetable.className = elements.classSelect.value;
+    saveState(); renderTimetable();
+  });
+  elements.switchTime.addEventListener("change", () => {
+    state.timetable.switchTime = elements.switchTime.value || "16:00";
+    timetableDayWasSelected = false;
+    selectedDayOffset = getAutomaticDayOffset();
+    saveState(); renderTimetable();
+  });
+  elements.resetButton.addEventListener("click", resetHome);
+
   elements.searchForm.addEventListener("submit", handleSearchSubmit);
   elements.searchInput.addEventListener("input", handleSearchInput);
   elements.searchInput.addEventListener("keydown", handleSearchKeys);
-  elements.searchInput.addEventListener("focus", () => {
-    if (searchSuggestions.length) showSuggestions();
-  });
+  elements.searchInput.addEventListener("focus", () => { if (searchSuggestions.length) showSuggestions(); });
   document.addEventListener("pointerdown", (event) => {
-    if (!elements.searchForm.contains(event.target) && !elements.suggestions.contains(event.target)) hideSuggestions();
+    if (!event.target.closest(".search-item")) hideSuggestions();
   });
 
   elements.refreshTimetable.addEventListener("click", () => fetchTimetable(true));
   document.querySelectorAll("[data-day-offset]").forEach((button) => {
     button.addEventListener("click", () => {
       selectedDayOffset = Number(button.dataset.dayOffset);
-      timetableDayManuallySelected = true;
+      timetableDayWasSelected = true;
       renderTimetable();
     });
   });
 
-  document.querySelectorAll(".hide-widget").forEach((button) => {
-    button.addEventListener("click", () => {
-      const widgetName = button.dataset.widget;
-      state[widgetName].enabled = false;
-      saveState();
-      applyState();
-      showToast(`${widgetName === "clock" ? "時計" : "時間割"}を非表示にしました。設定から戻せます。`);
-    });
-  });
-
-  elements.settingsForm.addEventListener("change", handleSettingsChange);
-  elements.resetButton.addEventListener("click", resetAllSettings);
   elements.shortcutForm.addEventListener("submit", saveShortcutFromDialog);
   elements.closeShortcutDialog.addEventListener("click", closeShortcutDialog);
   elements.cancelShortcut.addEventListener("click", closeShortcutDialog);
-  elements.deleteShortcut.addEventListener("click", deleteSelectedShortcut);
-
-  elements.homeGrid.addEventListener("pointerdown", beginPointerDrag);
-  document.addEventListener("pointermove", movePointerDrag);
-  document.addEventListener("pointerup", endPointerDrag);
-  document.addEventListener("pointercancel", endPointerDrag);
+  elements.deleteShortcut.addEventListener("click", () => deleteShortcut(elements.shortcutForm.dataset.editId));
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stopClock(); else { updateClock(); startClock(); }
   });
 }
 
+function bindBackdropClose(dialog) {
+  dialog.addEventListener("click", (event) => {
+    const panel = dialog.querySelector(".sheet-panel");
+    if (!panel.contains(event.target)) dialog.close();
+  });
+}
+
 function toggleEditMode() {
   isEditing = !isEditing;
-  elements.body.classList.toggle("editing", isEditing);
-  elements.editButton.setAttribute("aria-pressed", String(isEditing));
-  elements.editButton.setAttribute("aria-label", isEditing ? "編集を完了" : "ホーム画面を編集");
-  elements.editHint.hidden = !isEditing;
-  renderShortcuts();
-  applySavedOrder();
-  showToast(isEditing ? "編集モードを開始しました" : "配置を保存しました");
+  renderHome();
+  showToast(isEditing ? "アイコンとウィジェットを編集できます" : "配置を保存しました");
 }
 
-function renderShortcuts() {
-  elements.homeGrid.querySelectorAll(".shortcut-item").forEach((element) => element.remove());
-
-  state.shortcuts.forEach((shortcut) => {
-    const item = document.createElement("article");
-    item.className = "home-item shortcut-item span-two";
-    item.dataset.key = `shortcut:${shortcut.id}`;
-    item.tabIndex = 0;
-    item.setAttribute("role", "link");
-    item.setAttribute("aria-label", shortcut.name);
-    item.innerHTML = `
-      <div class="shortcut-controls">
-        <button class="shortcut-edit" type="button" aria-label="${escapeHtml(shortcut.name)}を編集">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15.5V20h4.5L19.8 8.7l-4.5-4.5L4 15.5Z"/></svg>
-        </button>
-      </div>
-      <div class="shortcut-icon" style="--shortcut-color:${safeColor(shortcut.color)}">
-        <span class="shortcut-initial">${escapeHtml(firstCharacter(shortcut.name))}</span>
-        <img alt="" src="${faviconUrl(shortcut.url)}">
-      </div>
-      <div class="shortcut-name">${escapeHtml(shortcut.name)}</div>`;
-
-    const image = item.querySelector("img");
-    image.addEventListener("error", () => image.remove(), { once: true });
-    item.querySelector(".shortcut-edit").addEventListener("click", (event) => {
-      event.stopPropagation();
-      openShortcutDialog(shortcut.id);
-    });
-    item.addEventListener("click", () => {
-      if (!isEditing) window.location.href = shortcut.url;
-    });
-    item.addEventListener("keydown", (event) => {
-      if (!isEditing && (event.key === "Enter" || event.key === " ")) {
-        event.preventDefault();
-        window.location.href = shortcut.url;
-      }
-    });
-    elements.homeGrid.appendChild(item);
-  });
-
-  const addItem = document.createElement("button");
-  addItem.className = "home-item shortcut-item add-shortcut span-two";
-  addItem.type = "button";
-  addItem.dataset.key = "add-shortcut";
-  addItem.innerHTML = '<span class="shortcut-icon" aria-hidden="true">+</span><span class="shortcut-name">追加</span>';
-  addItem.addEventListener("click", () => openShortcutDialog());
-  elements.homeGrid.appendChild(addItem);
-}
-
-function applySavedOrder() {
-  const items = new Map([...elements.homeGrid.querySelectorAll(".home-item[data-key]")].map((item) => [item.dataset.key, item]));
-  state.order.forEach((key) => {
-    const item = items.get(key);
-    if (item) elements.homeGrid.appendChild(item);
-  });
-  const addItem = items.get("add-shortcut");
-  if (addItem) elements.homeGrid.appendChild(addItem);
-}
-
-function saveCurrentOrder() {
-  state.order = [...elements.homeGrid.querySelectorAll(".home-item[data-key]")]
-    .map((item) => item.dataset.key)
-    .filter((key) => key && key !== "add-shortcut");
+function hideWidget(key) {
+  if (!state[key]) return;
+  state[key].enabled = false;
   saveState();
+  renderHome();
+  syncSettingsControls();
+  showToast("設定からもう一度表示できます");
 }
 
-function beginPointerDrag(event) {
+function setWidgetEnabled(key, enabled) {
+  state[key].enabled = enabled;
+  if (enabled) {
+    if (!state.layout[key]) state.layout[key] = defaultRectFor(key);
+    settleLayout(key);
+  }
+  saveState();
+  renderHome();
+  if (key === "timetable" && enabled && !timetableData) fetchTimetable();
+}
+
+function beginGridDrag(event) {
   if (!isEditing || event.button !== 0) return;
-  if (event.target.closest("button") || event.target.closest("input") || event.target.closest("select")) return;
+  const item = event.target.closest(".grid-item");
+  if (!item || item.dataset.key === "add-shortcut") return;
+  const key = item.dataset.key;
+  if (!state.layout[key]) return;
 
-  const item = event.target.closest(".home-item:not(.add-shortcut)");
-  if (!item) return;
-  if (item.classList.contains("widget") && !event.target.closest(".drag-handle")) return;
+  let mode = "";
+  if (event.target.closest(".resize-handle")) mode = "resize";
+  else if (event.target.closest(".drag-grip")) mode = "move";
+  else if (item.classList.contains("shortcut-item") && !event.target.closest(".shortcut-actions")) mode = "move";
+  if (!mode) return;
 
-  draggedItem = item;
-  dragPointerId = event.pointerId;
-  const rect = item.getBoundingClientRect();
-  dragGhost = item.cloneNode(true);
-  dragGhost.classList.add("drag-ghost");
-  dragGhost.style.left = `${rect.left}px`;
-  dragGhost.style.top = `${rect.top}px`;
-  dragGhost.style.width = `${rect.width}px`;
-  dragGhost.style.height = `${rect.height}px`;
-  dragGhost.dataset.offsetX = String(event.clientX - rect.left);
-  dragGhost.dataset.offsetY = String(event.clientY - rect.top);
-  document.body.appendChild(dragGhost);
-  item.classList.add("is-dragging");
-  item.setPointerCapture?.(event.pointerId);
   event.preventDefault();
+  item.setPointerCapture?.(event.pointerId);
+  dragSession = {
+    pointerId: event.pointerId,
+    key,
+    mode,
+    startX: event.clientX,
+    startY: event.clientY,
+    original: { ...state.layout[key] },
+    moved: false,
+    item
+  };
+  item.classList.add("drag-active");
+  elements.body.classList.add("dragging");
 }
 
-function movePointerDrag(event) {
-  if (!draggedItem || event.pointerId !== dragPointerId || !dragGhost) return;
-  const offsetX = Number(dragGhost.dataset.offsetX);
-  const offsetY = Number(dragGhost.dataset.offsetY);
-  dragGhost.style.left = `${event.clientX - offsetX}px`;
-  dragGhost.style.top = `${event.clientY - offsetY}px`;
+function updateGridDrag(event) {
+  if (!dragSession || event.pointerId !== dragSession.pointerId) return;
+  const gridRect = elements.homeGrid.getBoundingClientRect();
+  const columnStep = (gridRect.width + state.grid.gap) / state.grid.columns;
+  const rowStep = state.grid.rowHeight + state.grid.gap;
+  const dx = Math.round((event.clientX - dragSession.startX) / columnStep);
+  const dy = Math.round((event.clientY - dragSession.startY) / rowStep);
+  const original = dragSession.original;
+  const limits = limitsFor(dragSession.key);
+  let next;
 
-  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".home-item:not(.add-shortcut):not(.is-dragging)");
-  if (!target || target.parentElement !== elements.homeGrid) return;
-  const targetRect = target.getBoundingClientRect();
-  const insertAfter = event.clientY > targetRect.top + targetRect.height / 2 ||
-    (Math.abs(event.clientY - (targetRect.top + targetRect.height / 2)) < targetRect.height / 3 && event.clientX > targetRect.left + targetRect.width / 2);
-  elements.homeGrid.insertBefore(draggedItem, insertAfter ? target.nextSibling : target);
+  if (dragSession.mode === "move") {
+    next = {
+      ...original,
+      x: Math.min(state.grid.columns - original.w, Math.max(0, original.x + dx)),
+      y: Math.max(0, original.y + dy)
+    };
+  } else {
+    next = {
+      ...original,
+      w: Math.min(state.grid.columns - original.x, Math.max(limits.minW, Math.min(limits.maxW, original.w + dx))),
+      h: Math.max(limits.minH, Math.min(limits.maxH, original.h + dy))
+    };
+  }
+
+  next = clampRect(dragSession.key, next);
+  dragSession.moved ||= next.x !== original.x || next.y !== original.y || next.w !== original.w || next.h !== original.h;
+  state.layout[dragSession.key] = next;
+  positionElement(dragSession.item, dragSession.key, next);
+  if (event.clientY > window.innerHeight - 42) window.scrollBy({ top: 18, behavior: "auto" });
 }
 
-function endPointerDrag(event) {
-  if (!draggedItem || (event.pointerId !== undefined && event.pointerId !== dragPointerId)) return;
-  draggedItem.classList.remove("is-dragging");
-  dragGhost?.remove();
-  draggedItem = null;
-  dragGhost = null;
-  dragPointerId = null;
-  saveCurrentOrder();
+function finishGridDrag(event) {
+  if (!dragSession || (event.pointerId !== undefined && event.pointerId !== dragSession.pointerId)) return;
+  dragSession.item.classList.remove("drag-active");
+  if (dragSession.moved) suppressShortcutClickUntil = Date.now() + 350;
+  const activeKey = dragSession.key;
+  dragSession = null;
+  elements.body.classList.remove("dragging");
+  settleLayout(activeKey);
+  saveState();
+  renderHome();
 }
 
-function openShortcutDialog(shortcutId = "") {
-  const shortcut = state.shortcuts.find((item) => item.id === shortcutId);
+function syncSettingsControls() {
+  elements.gridColumns.value = String(state.grid.columns);
+  elements.gridColumnsValue.textContent = String(state.grid.columns);
+  elements.gridRowHeight.value = String(state.grid.rowHeight);
+  elements.gridRowHeightValue.textContent = `${state.grid.rowHeight} px`;
+  elements.gridGap.value = String(state.grid.gap);
+  elements.gridGapValue.textContent = `${state.grid.gap} px`;
+  elements.widgetOpacity.value = String(state.appearance.widgetOpacity);
+  elements.widgetOpacityValue.textContent = `${state.appearance.widgetOpacity}%`;
+  elements.wallpaperShade.value = String(state.appearance.wallpaperShade);
+  elements.wallpaperShadeValue.textContent = `${state.appearance.wallpaperShade}%`;
+  elements.autoTheme.checked = state.appearance.autoTheme;
+  elements.manualThemes.disabled = state.appearance.autoTheme;
+  const theme = elements.manualThemes.querySelector(`[name="manualTheme"][value="${state.appearance.manualTheme}"]`);
+  if (theme) theme.checked = true;
+  elements.searchEnabled.checked = state.search.enabled;
+  elements.clockEnabled.checked = state.clock.enabled;
+  elements.clockType.value = state.clock.type;
+  elements.clock24Hour.checked = state.clock.is24Hour;
+  elements.timetableEnabled.checked = state.timetable.enabled;
+  elements.classSelect.value = state.timetable.className;
+  elements.switchTime.value = state.timetable.switchTime;
+  elements.removeWallpaper.disabled = !state.appearance.hasWallpaper;
+
+  elements.gridPresets.querySelectorAll("[data-grid-preset]").forEach((button) => {
+    const preset = GRID_PRESETS[button.dataset.gridPreset];
+    button.classList.toggle("active", preset.columns === state.grid.columns && preset.rowHeight === state.grid.rowHeight && preset.gap === state.grid.gap);
+  });
+}
+
+function applyAppearance() {
+  const style = document.documentElement.style;
+  style.setProperty("--widget-opacity", String(state.appearance.widgetOpacity / 100));
+  style.setProperty("--wallpaper-shade", String(state.appearance.wallpaperShade / 100));
+
+  const palette = state.appearance.autoTheme ? state.appearance.autoPalette : null;
+  if (palette) {
+    elements.body.dataset.theme = "auto";
+    style.setProperty("--surface-rgb", palette.surface.join(" "));
+    style.setProperty("--surface-strong-rgb", palette.surfaceStrong.join(" "));
+    style.setProperty("--text-rgb", palette.text.join(" "));
+    style.setProperty("--muted-rgb", palette.muted.join(" "));
+    style.setProperty("--accent-rgb", palette.accent.join(" "));
+    style.setProperty("--accent-contrast-rgb", palette.accentContrast.join(" "));
+    document.documentElement.style.colorScheme = palette.dark ? "dark" : "light";
+  } else {
+    elements.body.dataset.theme = state.appearance.autoTheme ? "silver" : state.appearance.manualTheme;
+    ["--surface-rgb", "--surface-strong-rgb", "--text-rgb", "--muted-rgb", "--accent-rgb", "--accent-contrast-rgb"].forEach((property) => style.removeProperty(property));
+    document.documentElement.style.colorScheme = elements.body.dataset.theme === "graphite" ? "dark" : "light";
+  }
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent-rgb").trim().split(/\s+/).map(Number);
+  document.querySelector('meta[name="theme-color"]').content = rgbToHex(accent);
+}
+
+async function openWallpaperDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(WALLPAPER_DB, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(WALLPAPER_STORE)) request.result.createObjectStore(WALLPAPER_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function wallpaperDatabaseAction(mode, value) {
+  const database = await openWallpaperDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(WALLPAPER_STORE, mode === "get" ? "readonly" : "readwrite");
+    const store = transaction.objectStore(WALLPAPER_STORE);
+    const request = mode === "get" ? store.get("current") : mode === "put" ? store.put(value, "current") : store.delete("current");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => database.close();
+  });
+}
+
+async function loadWallpaper() {
+  try {
+    const blob = await wallpaperDatabaseAction("get");
+    if (blob instanceof Blob) {
+      setWallpaperBlob(blob);
+      state.appearance.hasWallpaper = true;
+    } else {
+      state.appearance.hasWallpaper = false;
+    }
+  } catch (error) {
+    state.appearance.hasWallpaper = false;
+    console.warn("壁紙を読み込めませんでした。", error);
+  }
+  saveState();
+  syncSettingsControls();
+}
+
+function setWallpaperBlob(blob) {
+  if (wallpaperObjectUrl) URL.revokeObjectURL(wallpaperObjectUrl);
+  wallpaperObjectUrl = URL.createObjectURL(blob);
+  elements.wallpaperLayer.style.backgroundImage = `url("${wallpaperObjectUrl}")`;
+}
+
+async function handleWallpaperUpload() {
+  const file = elements.wallpaperInput.files?.[0];
+  elements.wallpaperInput.value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    showToast("画像ファイルを選んでください");
+    return;
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    showToast("壁紙は20MB以下の画像にしてください");
+    return;
+  }
+
+  try {
+    const palette = await extractPalette(file);
+    await wallpaperDatabaseAction("put", file);
+    state.appearance.hasWallpaper = true;
+    state.appearance.autoPalette = palette;
+    setWallpaperBlob(file);
+    saveState();
+    applyAppearance();
+    syncSettingsControls();
+    showToast("壁紙とウィジェットの色を更新しました");
+  } catch (error) {
+    console.error("壁紙の設定に失敗しました。", error);
+    showToast("この画像を壁紙に設定できませんでした");
+  }
+}
+
+async function removeWallpaper() {
+  try { await wallpaperDatabaseAction("delete"); } catch (error) { console.warn(error); }
+  if (wallpaperObjectUrl) URL.revokeObjectURL(wallpaperObjectUrl);
+  wallpaperObjectUrl = "";
+  elements.wallpaperLayer.style.backgroundImage = "";
+  state.appearance.hasWallpaper = false;
+  state.appearance.autoPalette = null;
+  saveState();
+  applyAppearance();
+  syncSettingsControls();
+  showToast("壁紙を削除しました");
+}
+
+async function extractPalette(file) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = 56;
+  canvas.height = 56;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const crop = Math.min(bitmap.width, bitmap.height);
+  const sx = (bitmap.width - crop) / 2;
+  const sy = (bitmap.height - crop) / 2;
+  context.drawImage(bitmap, sx, sy, crop, crop, 0, 0, 56, 56);
+  bitmap.close?.();
+  const pixels = context.getImageData(0, 0, 56, 56).data;
+  let red = 0, green = 0, blue = 0, samples = 0;
+  let bestColor = [52, 120, 246];
+  let bestScore = -1;
+
+  for (let index = 0; index < pixels.length; index += 4) {
+    if (pixels[index + 3] < 180) continue;
+    const r = pixels[index], g = pixels[index + 1], b = pixels[index + 2];
+    red += r; green += g; blue += b; samples += 1;
+    const [h, s, l] = rgbToHsl(r, g, b);
+    const score = s * (1 - Math.abs(l - .52)) * (l > .15 && l < .9 ? 1 : .2);
+    if (score > bestScore) {
+      bestScore = score;
+      bestColor = hslToRgb(h, Math.max(.5, s), Math.min(.64, Math.max(.43, l)));
+    }
+  }
+
+  const average = samples ? [red / samples, green / samples, blue / samples] : [160, 180, 200];
+  const averageLight = relativeLuminance(average);
+  const dark = averageLight < .36;
+  const accentContrast = relativeLuminance(bestColor) > .55 ? [18, 22, 28] : [255, 255, 255];
+  return {
+    dark,
+    accent: bestColor.map(Math.round),
+    accentContrast,
+    surface: dark ? [29, 32, 39] : [255, 255, 255],
+    surfaceStrong: dark ? [45, 49, 58] : [242, 245, 250],
+    text: dark ? [248, 249, 252] : [20, 24, 32],
+    muted: dark ? [190, 196, 207] : [78, 87, 101]
+  };
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const delta = max - min;
+    s = l > .5 ? delta / (2 - max - min) : delta / (max + min);
+    if (max === r) h = (g - b) / delta + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+    h /= 6;
+  }
+  return [h, s, l];
+}
+
+function hslToRgb(h, s, l) {
+  if (s === 0) return [l * 255, l * 255, l * 255];
+  const hueToRgb = (p, q, t) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = l < .5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return [hueToRgb(p, q, h + 1 / 3) * 255, hueToRgb(p, q, h) * 255, hueToRgb(p, q, h - 1 / 3) * 255];
+}
+
+function relativeLuminance([r, g, b]) {
+  const values = [r, g, b].map((value) => {
+    const channel = value / 255;
+    return channel <= .03928 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+  });
+  return .2126 * values[0] + .7152 * values[1] + .0722 * values[2];
+}
+
+function rgbToHex(rgb) {
+  if (!Array.isArray(rgb) || rgb.some((value) => !Number.isFinite(value))) return "#3478f6";
+  return `#${rgb.map((value) => Math.round(value).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function populateClassSelect() {
+  const fragment = document.createDocumentFragment();
+  CLASS_LIST.forEach((className) => {
+    const option = document.createElement("option");
+    option.value = className;
+    option.textContent = className;
+    fragment.appendChild(option);
+  });
+  elements.classSelect.appendChild(fragment);
+}
+
+function openShortcutDialog(id = "") {
+  const shortcut = state.shortcuts.find((item) => item.id === id);
   elements.shortcutForm.dataset.editId = shortcut?.id || "";
   elements.shortcutDialogTitle.textContent = shortcut ? "ショートカットを編集" : "ショートカットを追加";
   elements.shortcutName.value = shortcut?.name || "";
   elements.shortcutUrl.value = shortcut?.url || "";
-  elements.shortcutColor.value = safeColor(shortcut?.color || "#0b57d0");
+  elements.shortcutColor.value = safeColor(shortcut?.color || "#3478f6");
   elements.deleteShortcut.hidden = !shortcut;
   elements.shortcutDialog.showModal();
   requestAnimationFrame(() => elements.shortcutName.focus());
@@ -341,9 +909,9 @@ function closeShortcutDialog() {
 function saveShortcutFromDialog(event) {
   event.preventDefault();
   const name = elements.shortcutName.value.trim();
-  const normalizedUrl = normalizeUrl(elements.shortcutUrl.value);
+  const url = normalizeUrl(elements.shortcutUrl.value);
   const color = safeColor(elements.shortcutColor.value);
-  if (!name || !normalizedUrl) {
+  if (!name || !url) {
     showToast("名前と正しいURLを入力してください");
     return;
   }
@@ -351,32 +919,36 @@ function saveShortcutFromDialog(event) {
   const editId = elements.shortcutForm.dataset.editId;
   if (editId) {
     const shortcut = state.shortcuts.find((item) => item.id === editId);
-    if (shortcut) Object.assign(shortcut, { name, url: normalizedUrl, color });
+    if (shortcut) Object.assign(shortcut, { name, url, color });
   } else {
     const id = `sc-${Date.now().toString(36)}`;
-    state.shortcuts.push({ id, name, url: normalizedUrl, color });
-    state.order.push(`shortcut:${id}`);
+    const key = shortcutKey(id);
+    state.shortcuts.push({ id, name, url, color });
+    state.order.push(key);
+    state.layout[key] = findOpenRect(Math.min(2, state.grid.columns), 2);
   }
   saveState();
   closeShortcutDialog();
-  applyState();
+  renderHome();
   showToast(editId ? "ショートカットを更新しました" : "ショートカットを追加しました");
 }
 
-function deleteSelectedShortcut() {
-  const id = elements.shortcutForm.dataset.editId;
+function deleteShortcut(id) {
   const shortcut = state.shortcuts.find((item) => item.id === id);
   if (!shortcut || !window.confirm(`「${shortcut.name}」を削除しますか？`)) return;
+  const key = shortcutKey(id);
   state.shortcuts = state.shortcuts.filter((item) => item.id !== id);
-  state.order = state.order.filter((token) => token !== `shortcut:${id}`);
+  state.order = state.order.filter((itemKey) => itemKey !== key);
+  delete state.layout[key];
   saveState();
-  closeShortcutDialog();
-  applyState();
+  if (elements.shortcutDialog.open) closeShortcutDialog();
+  renderHome();
   showToast("ショートカットを削除しました");
 }
 
 function normalizeUrl(input) {
-  const candidate = /^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`;
+  const raw = String(input || "").trim();
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   try {
     const url = new URL(candidate);
     return ["http:", "https:"].includes(url.protocol) ? url.href : "";
@@ -387,12 +959,12 @@ function faviconUrl(url) {
   return `https://www.google.com/s2/favicons?domain_url=${encodeURIComponent(url)}&sz=128`;
 }
 
-function firstCharacter(value) {
-  return [...(value.trim() || "?")][0].toLocaleUpperCase("ja-JP");
+function safeColor(value) {
+  return /^#[0-9a-f]{6}$/i.test(value || "") ? value : "#3478f6";
 }
 
-function safeColor(value) {
-  return /^#[0-9a-f]{6}$/i.test(value || "") ? value : "#0b57d0";
+function firstCharacter(value) {
+  return [...(value.trim() || "?")][0].toLocaleUpperCase("ja-JP");
 }
 
 function handleSearchSubmit(event) {
@@ -402,9 +974,8 @@ function handleSearchSubmit(event) {
 }
 
 function performGoogleSearch(query) {
-  const trimmed = String(query || "").trim();
-  if (!trimmed) return;
-  window.location.href = `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+  const value = String(query || "").trim();
+  if (value) window.location.href = `https://www.google.com/search?q=${encodeURIComponent(value)}`;
 }
 
 function handleSearchInput() {
@@ -423,18 +994,14 @@ function handleSearchInput() {
 async function fetchSuggestions(query) {
   suggestionRequest = new AbortController();
   try {
-    const url = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`;
-    const response = await fetch(url, { signal: suggestionRequest.signal });
+    const response = await fetch(`https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`, { signal: suggestionRequest.signal });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (elements.searchInput.value.trim() !== query) return;
     searchSuggestions = Array.isArray(data?.[1]) ? data[1].slice(0, 7) : [];
     renderSuggestions();
   } catch (error) {
-    if (error.name !== "AbortError") {
-      searchSuggestions = [];
-      hideSuggestions();
-    }
+    if (error.name !== "AbortError") hideSuggestions();
   }
 }
 
@@ -442,13 +1009,13 @@ function renderSuggestions() {
   elements.suggestions.replaceChildren();
   searchSuggestions.forEach((suggestion, index) => {
     const button = document.createElement("button");
-    button.className = "suggestion-item";
     button.type = "button";
-    button.role = "option";
+    button.className = "suggestion-item";
+    button.setAttribute("role", "option");
     button.textContent = suggestion;
     button.addEventListener("pointerdown", (event) => event.preventDefault());
-    button.addEventListener("click", () => performGoogleSearch(suggestion));
     button.addEventListener("mouseenter", () => setActiveSuggestion(index, false));
+    button.addEventListener("click", () => performGoogleSearch(suggestion));
     elements.suggestions.appendChild(button);
   });
   if (searchSuggestions.length) showSuggestions(); else hideSuggestions();
@@ -466,16 +1033,12 @@ function hideSuggestions() {
 }
 
 function handleSearchKeys(event) {
-  if (event.key === "Escape") {
-    hideSuggestions();
-    return;
-  }
+  if (event.key === "Escape") return hideSuggestions();
   if (!searchSuggestions.length || elements.suggestions.hidden) return;
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     const direction = event.key === "ArrowDown" ? 1 : -1;
-    const next = (activeSuggestionIndex + direction + searchSuggestions.length) % searchSuggestions.length;
-    setActiveSuggestion(next, true);
+    setActiveSuggestion((activeSuggestionIndex + direction + searchSuggestions.length) % searchSuggestions.length, true);
   }
 }
 
@@ -485,7 +1048,13 @@ function setActiveSuggestion(index, copyToInput) {
     item.classList.toggle("active", itemIndex === index);
     item.setAttribute("aria-selected", String(itemIndex === index));
   });
-  if (copyToInput && searchSuggestions[index]) elements.searchInput.value = searchSuggestions[index];
+  if (copyToInput) elements.searchInput.value = searchSuggestions[index];
+}
+
+function updateClockMode() {
+  elements.digitalClock.hidden = state.clock.type !== "digital";
+  elements.analogClock.hidden = state.clock.type !== "analog";
+  updateClock();
 }
 
 function startClock() {
@@ -500,67 +1069,60 @@ function stopClock() {
 
 function updateClock() {
   const now = new Date();
-  const timeOptions = { hour: "2-digit", minute: "2-digit", hour12: !state.clock.is24Hour };
-  elements.clockTime.textContent = new Intl.DateTimeFormat("ja-JP", timeOptions).format(now);
-  elements.clockDate.textContent = new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric", weekday: "long" }).format(now);
-  elements.todayLabel.textContent = new Intl.DateTimeFormat("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "short" }).format(now);
-
+  const date = new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric", weekday: "long" }).format(now);
+  elements.clockTime.textContent = new Intl.DateTimeFormat("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: !state.clock.is24Hour }).format(now);
+  elements.clockDate.textContent = date;
+  elements.analogDate.textContent = date;
   const seconds = now.getSeconds();
   const minutes = now.getMinutes() + seconds / 60;
-  const hours = (now.getHours() % 12) + minutes / 60;
+  const hours = now.getHours() % 12 + minutes / 60;
   elements.secondHand.style.transform = `rotate(${seconds * 6}deg)`;
   elements.minuteHand.style.transform = `rotate(${minutes * 6}deg)`;
   elements.hourHand.style.transform = `rotate(${hours * 30}deg)`;
+  updateClockModeVisibilityOnly();
 
-  if (!timetableDayManuallySelected) {
-    const automaticDayOffset = getInitialDayOffset();
-    if (automaticDayOffset !== selectedDayOffset) {
-      selectedDayOffset = automaticDayOffset;
+  if (!timetableDayWasSelected) {
+    const automatic = getAutomaticDayOffset();
+    if (automatic !== selectedDayOffset) {
+      selectedDayOffset = automatic;
       renderTimetable();
     }
   }
 }
 
-function populateClassSelect() {
-  const fragment = document.createDocumentFragment();
-  CLASS_LIST.forEach((className) => {
-    const option = document.createElement("option");
-    option.value = className;
-    option.textContent = className;
-    fragment.appendChild(option);
-  });
-  elements.classSelect.appendChild(fragment);
+function updateClockModeVisibilityOnly() {
+  elements.digitalClock.hidden = state.clock.type !== "digital";
+  elements.analogClock.hidden = state.clock.type !== "analog";
 }
 
-function getInitialDayOffset() {
+function getAutomaticDayOffset() {
   const now = new Date();
-  const [hours, minutes] = (state?.timetable?.switchTime || "16:00").split(":").map(Number);
-  return now.getHours() > hours || (now.getHours() === hours && now.getMinutes() >= minutes) ? 1 : 0;
+  const [hour, minute] = (state?.timetable?.switchTime || "16:00").split(":").map(Number);
+  return now.getHours() > hour || (now.getHours() === hour && now.getMinutes() >= minute) ? 1 : 0;
 }
 
-async function fetchTimetable(forceRefresh = false) {
-  if (!state.timetable.enabled && !forceRefresh) return;
-  elements.timetableMeta.textContent = "最新の時間割を取得中...";
+async function fetchTimetable(force = false) {
+  if (!state.timetable.enabled && !force) return;
+  elements.timetableMeta.textContent = "最新データを取得中...";
   elements.timetableContent.innerHTML = '<div class="timetable-loading"><span></span><span></span><span></span></div>';
   elements.refreshTimetable.disabled = true;
-
   try {
-    const response = await fetch(FIREBASE_URL, { cache: forceRefresh ? "reload" : "default" });
+    const response = await fetch(FIREBASE_URL, { cache: force ? "reload" : "default" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    if (!data || typeof data.schedules !== "object") throw new Error("時間割データの形式が正しくありません");
+    if (!data?.schedules) throw new Error("時間割データの形式が正しくありません");
     timetableData = data;
     localStorage.setItem(TIMETABLE_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
     renderTimetable();
-    if (forceRefresh) showToast("時間割を更新しました");
+    if (force) showToast("時間割を更新しました");
   } catch (error) {
     const cached = readTimetableCache();
     if (cached) {
       timetableData = cached.data;
-      renderTimetable(`オフライン表示・${formatCacheTime(cached.savedAt)}取得`);
+      renderTimetable(`保存データ・${formatCacheTime(cached.savedAt)}取得`);
     } else {
       elements.timetableMeta.textContent = "取得できませんでした";
-      elements.timetableContent.innerHTML = '<div class="timetable-message">時間割の取得に失敗しました。右上の更新ボタンでもう一度お試しください。</div>';
+      elements.timetableContent.innerHTML = '<div class="timetable-message">時間割を取得できませんでした。更新ボタンから再試行できます。</div>';
     }
     console.warn("時間割取得エラー", error);
   } finally {
@@ -576,11 +1138,10 @@ function readTimetableCache() {
 }
 
 function renderTimetable(customMeta = "") {
-  if (!elements.timetableContent || !state.timetable.enabled) return;
   document.querySelectorAll("[data-day-offset]").forEach((button) => {
     button.classList.toggle("active", Number(button.dataset.dayOffset) === selectedDayOffset);
   });
-  if (!timetableData?.schedules) return;
+  if (!timetableData?.schedules || !state.timetable.enabled) return;
 
   const date = new Date();
   date.setDate(date.getDate() + selectedDayOffset);
@@ -617,50 +1178,30 @@ function formatCacheTime(timestamp) {
   return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
 }
 
-function syncSettingsControls() {
-  const themeInput = elements.settingsForm.querySelector(`input[name="theme"][value="${state.theme}"]`);
-  if (themeInput) themeInput.checked = true;
-  elements.clockEnabled.checked = state.clock.enabled;
-  elements.clockType.value = state.clock.type;
-  elements.clock24Hour.checked = state.clock.is24Hour;
-  elements.timetableEnabled.checked = state.timetable.enabled;
-  elements.classSelect.value = state.timetable.className;
-  elements.switchTime.value = state.timetable.switchTime;
-}
-
-function handleSettingsChange(event) {
-  const target = event.target;
-  if (target.name === "theme") state.theme = target.value;
-  if (target.id === "clockEnabled") state.clock.enabled = target.checked;
-  if (target.id === "clockType") state.clock.type = target.value;
-  if (target.id === "clock24Hour") state.clock.is24Hour = target.checked;
-  if (target.id === "timetableEnabled") state.timetable.enabled = target.checked;
-  if (target.id === "classSelect") state.timetable.className = target.value;
-  if (target.id === "switchTime") {
-    state.timetable.switchTime = target.value || "16:00";
-    timetableDayManuallySelected = false;
-    selectedDayOffset = getInitialDayOffset();
-  }
+async function resetHome() {
+  if (!window.confirm("壁紙、ショートカット、配置、設定をすべて初期状態に戻しますか？")) return;
+  try { await wallpaperDatabaseAction("delete"); } catch (error) { console.warn(error); }
+  if (wallpaperObjectUrl) URL.revokeObjectURL(wallpaperObjectUrl);
+  wallpaperObjectUrl = "";
+  elements.wallpaperLayer.style.backgroundImage = "";
+  state = createDefaultState();
+  selectedDayOffset = getAutomaticDayOffset();
+  timetableDayWasSelected = false;
+  ensureLayoutEntries();
+  settleLayout();
   saveState();
-  applyState();
-  if (target.id === "timetableEnabled" && target.checked && !timetableData) fetchTimetable();
-}
-
-function resetAllSettings() {
-  if (!window.confirm("ショートカット、配置、テーマをすべて初期状態に戻しますか？")) return;
-  state = defaultState();
-  timetableDayManuallySelected = false;
-  selectedDayOffset = getInitialDayOffset();
-  saveState();
-  applyState();
-  showToast("初期状態に戻しました");
+  applyGridSettings();
+  applyAppearance();
+  renderHome();
+  syncSettingsControls();
+  showToast("ホーム画面を初期状態に戻しました");
 }
 
 function showToast(message) {
   window.clearTimeout(toastTimer);
   elements.toast.textContent = message;
   elements.toast.classList.add("show");
-  toastTimer = window.setTimeout(() => elements.toast.classList.remove("show"), 2400);
+  toastTimer = window.setTimeout(() => elements.toast.classList.remove("show"), 2300);
 }
 
 function escapeHtml(value) {

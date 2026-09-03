@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Pixel Home New Tab",
-  "version": "0.1.0",
-  "description": "Google Pixel のホーム画面に着想を得た、時間割付きの新しいタブページです。",
+  "name": "Home Grid New Tab",
+  "version": "0.2.0",
+  "description": "iOS風の自由なグリッド、背景連動テーマ、時間割を備えた新しいタブページです。",
   "host_permissions": [
     "https://suggestqueries.google.com/*",
     "https://www.google.com/complete/search*",
