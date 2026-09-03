@@ -10,7 +10,7 @@ const TIMETABLE_CACHE_KEY = "homeGridTimetableCacheV3";
 const WEATHER_CACHE_KEY = "homeGridWeatherCacheV3";
 const WALLPAPER_DB = "home-grid-assets";
 const WALLPAPER_STORE = "wallpaper";
-const CORE_WIDGETS = ["search", "clock", "timetable", "weather", "agenda"];
+const CORE_WIDGETS = ["search", "clock", "timetable", "weather"];
 const MAX_PAGES = 6;
 
 const CLASS_LIST = [
@@ -56,21 +56,20 @@ const elements = Object.fromEntries([
   "wallpaperLayer", "editButton", "editButtonLabel", "settingsButton", "editGuide", "editToolbar", "undoButton",
   "homeStage", "homeGrid", "gridGhost", "searchForm", "searchInput", "suggestions", "digitalClock", "analogClock",
   "clockTime", "clockDate", "analogDate", "hourHand", "minuteHand", "secondHand", "timetableMeta", "timetableContent",
-  "lessonNow", "refreshTimetable", "weatherLocation", "weatherContent", "refreshWeather", "agendaContent", "openAgendaSettings",
-  "pageNavigation", "previousPage", "nextPage", "pageDots", "settingsDialog", "settingsForm", "closeSettings", "gridPresets",
+  "lessonNow", "refreshTimetable", "weatherLocation", "weatherContent", "refreshWeather",
+  "pageNavigation", "previousPage", "nextPage", "pageDots", "leftPageDrop", "rightPageDrop", "settingsDialog", "settingsForm", "closeSettings", "gridPresets",
   "gridColumns", "gridColumnsValue", "gridRowHeight", "gridRowHeightValue", "gridGap", "gridGapValue", "layoutTemplates",
   "newPageName", "addPageButton", "pageManager", "wallpaperInput", "removeWallpaper", "autoTheme", "manualThemes",
-  "widgetOpacity", "widgetOpacityValue", "wallpaperShade", "wallpaperShadeValue", "searchEnabled", "clockEnabled",
-  "timetableEnabled", "weatherEnabled", "agendaEnabled", "clockType", "clock24Hour", "classSelect", "switchTime",
+  "widgetOpacity", "widgetOpacityValue", "wallpaperShade", "wallpaperShadeValue", "motionStrength", "motionStrengthValue", "searchEnabled", "clockEnabled",
+  "timetableEnabled", "weatherEnabled", "clockType", "clock24Hour", "classSelect", "switchTime",
   "lessonPreset", "periodEditor", "copyPresetToCustom", "weatherLocationInput", "searchWeatherLocation", "useCurrentLocation",
-  "weatherSettingStatus", "searchEngine", "saveSearchHistory", "clearSearchHistory", "agendaSettingsSection", "agendaTitle",
-  "agendaDate", "addAgendaItem", "agendaManager", "styleTarget", "customStyleEnabled", "customStyleControls", "customOpacity",
+  "weatherSettingStatus", "searchEngine", "saveSearchHistory", "clearSearchHistory", "styleTarget", "customStyleEnabled", "customStyleControls", "customOpacity",
   "customOpacityValue", "customBlur", "customBlurValue", "customRadius", "customRadiusValue", "customShadow",
   "customShadowValue", "customTextColor", "customAccentColor", "resetCustomStyle", "layoutName", "saveNamedLayout",
   "savedLayoutManager", "exportSettings", "importSettings", "resetButton", "shortcutDialog", "shortcutForm",
   "shortcutDialogTitle", "shortcutName", "shortcutUrl", "shortcutColor", "shortcutFolder", "deleteShortcut",
   "closeShortcutDialog", "cancelShortcut", "folderDialog", "folderForm", "closeFolderDialog", "folderName",
-  "folderDialogItems", "deleteFolder", "saveFolder", "toast"
+  "folderDialogItems", "folderHint", "deleteFolder", "saveFolder", "toast"
 ].map((id) => [id, document.getElementById(id)]));
 elements.body = document.body;
 
@@ -89,12 +88,14 @@ let selectedDayOffset = getAutomaticDayOffset();
 let timetableDayWasSelected = false;
 let clockTimer = 0;
 let toastTimer = 0;
+let folderCloseTimer = 0;
 let suggestionsState = [];
 let activeSuggestionIndex = -1;
 let suggestionTimer = 0;
 let suggestionRequest = null;
 let openFolderId = "";
 let folderDragId = "";
+let pageAnimation = null;
 
 initialize();
 
@@ -108,7 +109,6 @@ async function initialize() {
   syncSettingsControls();
   updateClock();
   startClock();
-  renderAgenda();
   renderPeriodEditor();
   await Promise.allSettled([loadWallpaper(), fetchTimetable(), fetchWeather()]);
 }
@@ -118,22 +118,21 @@ function createDefaultState() {
   return {
     version: 3,
     grid: { ...GRID_PRESETS.standard },
-    appearance: { autoTheme: true, manualTheme: "silver", widgetOpacity: 82, wallpaperShade: 18, autoPalette: null, hasWallpaper: false },
+    appearance: { autoTheme: true, manualTheme: "silver", widgetOpacity: 72, wallpaperShade: 18, motionStrength: 70, autoPalette: null, hasWallpaper: false },
     widgetStyles: Object.fromEntries(CORE_WIDGETS.map((key) => [key, { enabled: false, opacity: 82, blur: 28, radius: 27, shadow: 55, text: "#141820", accent: "#3478f6" }])),
     search: { enabled: true, engine: "google", saveHistory: false, history: [] },
     clock: { enabled: true, type: "digital", is24Hour: true },
     timetable: { enabled: true, className: "101", switchTime: "16:00", lessonPreset: "50", customTimes: clone(LESSON_PRESETS["50"]) },
     weather: { enabled: true, locationName: "金沢市", latitude: 36.5613, longitude: 136.6562 },
-    agenda: { enabled: true, items: [] },
     shortcuts: DEFAULT_SHORTCUTS.map((item) => ({ ...item })),
     folders: [],
     pages: [{
       id: pageId,
       name: "ホーム",
-      order: ["clock", "search", "timetable", "weather", "agenda", ...DEFAULT_SHORTCUTS.map((item) => shortcutKey(item.id))],
+      order: ["clock", "search", "timetable", "weather", ...DEFAULT_SHORTCUTS.map((item) => shortcutKey(item.id))],
       layout: {
         clock: { x: 0, y: 0, w: 4, h: 3 }, search: { x: 4, y: 0, w: 8, h: 1 }, timetable: { x: 4, y: 1, w: 8, h: 3 },
-        weather: { x: 0, y: 3, w: 4, h: 3 }, agenda: { x: 0, y: 6, w: 4, h: 3 },
+        weather: { x: 0, y: 3, w: 4, h: 3 },
         [shortcutKey("google")]: { x: 4, y: 4, w: 2, h: 2 }, [shortcutKey("youtube")]: { x: 6, y: 4, w: 2, h: 2 },
         [shortcutKey("classroom")]: { x: 8, y: 4, w: 2, h: 2 }, [shortcutKey("drive")]: { x: 10, y: 4, w: 2, h: 2 }
       }
@@ -171,7 +170,6 @@ function mergeV3(stored, defaults) {
     clock: { ...defaults.clock, ...(stored.clock || {}) },
     timetable: { ...defaults.timetable, ...(stored.timetable || {}) },
     weather: { ...defaults.weather, ...(stored.weather || {}) },
-    agenda: { ...defaults.agenda, ...(stored.agenda || {}) },
     widgetStyles: Object.fromEntries(CORE_WIDGETS.map((key) => [key, { ...defaults.widgetStyles[key], ...(stored.widgetStyles?.[key] || {}) }]))
   };
   merged.shortcuts = Array.isArray(stored.shortcuts) ? stored.shortcuts.filter(isStoredShortcut).map((item) => ({ ...item, folderId: item.folderId || "" })) : defaults.shortcuts;
@@ -190,8 +188,9 @@ function migrateV2(v2, defaults) {
   defaults.shortcuts = Array.isArray(v2.shortcuts) ? v2.shortcuts.filter(isStoredShortcut).map((item) => ({ ...item, folderId: "" })) : defaults.shortcuts;
   const page = defaults.pages[0];
   const oldOrder = Array.isArray(v2.order) ? v2.order : [];
-  page.order = [...oldOrder.filter((key) => !["weather", "agenda"].includes(key)), "weather", "agenda"];
-  page.layout = { ...(v2.layout || {}), weather: { x: 0, y: 7, w: 4, h: 3 }, agenda: { x: 4, y: 7, w: 4, h: 3 } };
+  page.order = [...oldOrder.filter((key) => !["weather", "agenda"].includes(key)), "weather"];
+  page.layout = { ...(v2.layout || {}), weather: { x: 0, y: 7, w: 4, h: 3 } };
+  delete page.layout.agenda;
   defaults.shortcuts.forEach((item) => { const key = shortcutKey(item.id); if (!page.order.includes(key)) page.order.push(key); });
   return defaults;
 }
@@ -201,7 +200,8 @@ function sanitizeState() {
   state.grid.rowHeight = clampNumber(state.grid.rowHeight, 56, 112, 78);
   state.grid.gap = clampNumber(state.grid.gap, 8, 24, 14);
   state.search.history = Array.isArray(state.search.history) ? state.search.history.filter((item) => typeof item === "string").slice(0, 8) : [];
-  state.agenda.items = Array.isArray(state.agenda.items) ? state.agenda.items.filter((item) => item && typeof item.id === "string" && typeof item.title === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.date || "")) : [];
+  state.appearance.motionStrength = clampNumber(state.appearance.motionStrength, 0, 100, 70);
+  delete state.agenda;
   state.timetable.lessonPreset = ["45", "50", "custom"].includes(state.timetable.lessonPreset) ? state.timetable.lessonPreset : "50";
   state.timetable.customTimes = Array.isArray(state.timetable.customTimes) && state.timetable.customTimes.length === 7 ? state.timetable.customTimes : clone(LESSON_PRESETS["50"]);
   state.folders = Array.isArray(state.folders) ? state.folders.filter((folder) => folder && typeof folder.id === "string").map((folder) => ({ id: folder.id, name: typeof folder.name === "string" && folder.name.trim() ? folder.name.slice(0, 24) : "フォルダ", shortcutIds: Array.isArray(folder.shortcutIds) ? [...new Set(folder.shortcutIds)] : [] })) : [];
@@ -268,7 +268,7 @@ function limitsFor(key) {
   const columns = state.grid.columns;
   const kind = itemKind(key);
   if (kind === "search") return { minW: Math.min(4, columns), maxW: columns, minH: 1, maxH: 2 };
-  if (["clock", "weather", "agenda"].includes(kind)) return { minW: Math.min(2, columns), maxW: columns, minH: 2, maxH: 7 };
+  if (["clock", "weather"].includes(kind)) return { minW: Math.min(2, columns), maxW: columns, minH: 2, maxH: 7 };
   if (kind === "timetable") return { minW: Math.min(3, columns), maxW: columns, minH: 2, maxH: 8 };
   return { minW: 1, maxW: Math.min(4, columns), minH: 1, maxH: 4 };
 }
@@ -379,13 +379,12 @@ function createShortcutElement(shortcut) {
   const item = document.createElement("article");
   item.className = "grid-item shortcut-item";
   item.dataset.key = shortcutKey(shortcut.id);
-  item.innerHTML = `<div class="shortcut-actions"><button class="shortcut-delete" type="button" aria-label="${escapeHtml(shortcut.name)}を削除">−</button><button class="page-move" type="button" aria-label="次のページへ">›</button><button class="shortcut-edit" type="button" aria-label="${escapeHtml(shortcut.name)}を編集"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15.5V20h4.5L19.8 8.7l-4.5-4.5L4 15.5Z"/></svg></button></div><button class="shortcut-link" type="button" aria-label="${escapeHtml(shortcut.name)}を開く"><span class="shortcut-icon" style="--shortcut-color:${safeColor(shortcut.color)}"><span class="shortcut-initial">${escapeHtml(firstCharacter(shortcut.name))}</span><img src="${faviconUrl(shortcut.url)}" alt=""></span><span class="shortcut-name">${escapeHtml(shortcut.name)}</span></button><button class="resize-handle" type="button" aria-label="${escapeHtml(shortcut.name)}の大きさを変更"><span></span></button>`;
+  item.innerHTML = `<div class="shortcut-actions"><button class="shortcut-delete" type="button" aria-label="${escapeHtml(shortcut.name)}を削除">×</button><button class="shortcut-edit" type="button" aria-label="${escapeHtml(shortcut.name)}を編集"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15.5V20h4.5L19.8 8.7l-4.5-4.5L4 15.5Z"/></svg></button></div><button class="shortcut-link" type="button" aria-label="${escapeHtml(shortcut.name)}を開く"><span class="shortcut-icon" style="--shortcut-color:${safeColor(shortcut.color)}"><span class="shortcut-initial">${escapeHtml(firstCharacter(shortcut.name))}</span><img src="${faviconUrl(shortcut.url)}" alt=""></span><span class="shortcut-name">${escapeHtml(shortcut.name)}</span></button><button class="resize-handle" type="button" aria-label="${escapeHtml(shortcut.name)}の大きさを変更"><span></span></button>`;
   const image = item.querySelector("img");
   image.addEventListener("error", () => image.remove(), { once: true });
   item.querySelector(".shortcut-link").addEventListener("click", () => { if (!isEditing && Date.now() > suppressShortcutClickUntil) window.location.href = shortcut.url; });
   item.querySelector(".shortcut-edit").addEventListener("click", () => openShortcutDialog(shortcut.id));
   item.querySelector(".shortcut-delete").addEventListener("click", () => deleteShortcut(shortcut.id));
-  item.querySelector(".page-move").addEventListener("click", () => sendItemToNextPage(shortcutKey(shortcut.id)));
   return item;
 }
 
@@ -394,11 +393,11 @@ function createFolderElement(folder) {
   item.className = "grid-item shortcut-item folder-item";
   item.dataset.key = folderKey(folder.id);
   const icons = folder.shortcutIds.slice(0, 4).map((id) => state.shortcuts.find((shortcut) => shortcut.id === id)).filter(Boolean);
-  item.innerHTML = `<div class="shortcut-actions"><button class="shortcut-delete" type="button" aria-label="フォルダを解除">−</button><button class="page-move" type="button" aria-label="次のページへ">›</button><button class="shortcut-edit" type="button" aria-label="フォルダを編集">•••</button></div><button class="shortcut-link" type="button" aria-label="${escapeHtml(folder.name)}を開く"><span class="shortcut-icon">${icons.map((shortcut) => `<span class="folder-mini-icon" style="background:${safeColor(shortcut.color)}">${escapeHtml(firstCharacter(shortcut.name))}</span>`).join("")}</span><span class="shortcut-name">${escapeHtml(folder.name)}</span></button><button class="resize-handle" type="button" aria-label="フォルダの大きさを変更"><span></span></button>`;
+  item.innerHTML = `<div class="shortcut-actions"><button class="shortcut-delete" type="button" aria-label="フォルダを解除">×</button><button class="shortcut-edit" type="button" aria-label="フォルダを編集">•••</button></div><button class="shortcut-link" type="button" aria-label="${escapeHtml(folder.name)}を開く"><span class="shortcut-icon">${icons.map((shortcut) => `<span class="folder-mini-icon" style="--mini-color:${safeColor(shortcut.color)}"><span>${escapeHtml(firstCharacter(shortcut.name))}</span><img src="${faviconUrl(shortcut.url)}" alt=""></span>`).join("")}</span><span class="shortcut-name">${escapeHtml(folder.name)}</span></button><button class="resize-handle" type="button" aria-label="フォルダの大きさを変更"><span></span></button>`;
+  item.querySelectorAll(".folder-mini-icon img").forEach((image) => image.addEventListener("error", () => image.remove(), { once: true }));
   item.querySelector(".shortcut-link").addEventListener("click", () => { if (!isEditing && Date.now() > suppressShortcutClickUntil) openFolderDialog(folder.id); });
   item.querySelector(".shortcut-edit").addEventListener("click", () => openFolderDialog(folder.id));
   item.querySelector(".shortcut-delete").addEventListener("click", () => dissolveFolder(folder.id));
-  item.querySelector(".page-move").addEventListener("click", () => sendItemToNextPage(folderKey(folder.id)));
   return item;
 }
 
@@ -437,14 +436,14 @@ function bindEvents() {
   document.addEventListener("pointerup", finishGridDrag);
   document.addEventListener("pointercancel", finishGridDrag);
   document.querySelectorAll("[data-hide-widget]").forEach((button) => button.addEventListener("click", () => hideWidget(button.dataset.hideWidget)));
-  document.querySelectorAll("[data-send-next-page]").forEach((button) => button.addEventListener("click", () => sendItemToNextPage(button.dataset.sendNextPage)));
   elements.undoButton.addEventListener("click", undoLastChange);
 
   elements.previousPage.addEventListener("click", () => switchPageBy(-1));
   elements.nextPage.addEventListener("click", () => switchPageBy(1));
   elements.homeStage.addEventListener("pointerdown", beginPageSwipe);
+  elements.homeStage.addEventListener("pointermove", updatePageSwipe);
   elements.homeStage.addEventListener("pointerup", finishPageSwipe);
-  elements.homeStage.addEventListener("pointercancel", () => { swipeSession = null; });
+  elements.homeStage.addEventListener("pointercancel", cancelPageSwipe);
   elements.homeStage.addEventListener("wheel", handlePageWheel, { passive: false });
 
   elements.gridPresets.addEventListener("click", (event) => { const button = event.target.closest("[data-grid-preset]"); if (button) applyGridPreset(button.dataset.gridPreset); });
@@ -466,8 +465,10 @@ function bindEvents() {
   elements.widgetOpacity.addEventListener("change", saveState);
   elements.wallpaperShade.addEventListener("input", () => { state.appearance.wallpaperShade = Number(elements.wallpaperShade.value); elements.wallpaperShadeValue.textContent = `${state.appearance.wallpaperShade}%`; applyAppearance(); });
   elements.wallpaperShade.addEventListener("change", saveState);
+  elements.motionStrength.addEventListener("input", () => { state.appearance.motionStrength = Number(elements.motionStrength.value); elements.motionStrengthValue.textContent = `${state.appearance.motionStrength}%`; applyMotionSettings(); });
+  elements.motionStrength.addEventListener("change", saveState);
 
-  [["search", elements.searchEnabled], ["clock", elements.clockEnabled], ["timetable", elements.timetableEnabled], ["weather", elements.weatherEnabled], ["agenda", elements.agendaEnabled]].forEach(([key, input]) => input.addEventListener("change", () => setWidgetEnabled(key, input.checked)));
+  [["search", elements.searchEnabled], ["clock", elements.clockEnabled], ["timetable", elements.timetableEnabled], ["weather", elements.weatherEnabled]].forEach(([key, input]) => input.addEventListener("change", () => setWidgetEnabled(key, input.checked)));
   elements.clockType.addEventListener("change", () => { state.clock.type = elements.clockType.value; saveState(); updateClockMode(); });
   elements.clock24Hour.addEventListener("change", () => { state.clock.is24Hour = elements.clock24Hour.checked; saveState(); updateClock(); });
   elements.classSelect.addEventListener("change", () => { state.timetable.className = elements.classSelect.value; saveState(); renderTimetable(); });
@@ -489,10 +490,6 @@ function bindEvents() {
   elements.searchInput.addEventListener("keydown", handleSearchKeys);
   elements.searchInput.addEventListener("focus", () => renderLocalSuggestions(elements.searchInput.value.trim()));
   document.addEventListener("pointerdown", (event) => { if (!event.target.closest(".search-item")) hideSuggestions(); });
-
-  elements.openAgendaSettings.addEventListener("click", openAgendaSettings);
-  elements.addAgendaItem.addEventListener("click", addAgendaItem);
-  elements.agendaManager.addEventListener("click", handleAgendaManagerClick);
 
   elements.styleTarget.addEventListener("change", syncCustomStyleControls);
   elements.customStyleEnabled.addEventListener("change", updateCustomStyleFromControls);
@@ -525,7 +522,7 @@ function bindEvents() {
 
 function bindBackdropClose(dialog) {
   dialog.addEventListener("click", (event) => {
-    const panel = dialog.querySelector(".sheet-panel");
+    const panel = dialog.querySelector(".sheet-panel, .folder-glass");
     if (!panel || panel.contains(event.target)) return;
     if (dialog === elements.shortcutDialog) closeShortcutDialog();
     else if (dialog === elements.folderDialog) closeFolderDialog();
@@ -565,7 +562,6 @@ function undoLastChange() {
   renderHome();
   syncSettingsControls();
   renderTimetable();
-  renderAgenda();
   showToast("ひとつ前の状態に戻しました");
 }
 
@@ -611,7 +607,7 @@ function beginGridDrag(event) {
   event.preventDefault();
   pushUndo();
   item.setPointerCapture?.(event.pointerId);
-  dragSession = { pointerId: event.pointerId, key, mode, startX: event.clientX, startY: event.clientY, original: { ...page.layout[key] }, next: { ...page.layout[key] }, moved: false, item, folderTarget: "" };
+  dragSession = { pointerId: event.pointerId, key, mode, startX: event.clientX, startY: event.clientY, original: { ...page.layout[key] }, next: { ...page.layout[key] }, moved: false, item, folderTarget: "", edgeDirection: 0 };
   positionGhost(dragSession.next, false);
   item.classList.add("drag-active");
   elements.body.classList.add("dragging");
@@ -633,9 +629,17 @@ function updateGridDrag(event) {
   next = clampRect(dragSession.key, next);
   dragSession.next = next;
   dragSession.moved ||= JSON.stringify(next) !== JSON.stringify(original);
+  const edgeInset = Math.max(58, Math.min(92, window.innerWidth * .07));
+  const edgeDirection = dragSession.mode === "move" && event.clientX <= edgeInset ? -1 : dragSession.mode === "move" && event.clientX >= window.innerWidth - edgeInset ? 1 : 0;
+  dragSession.edgeDirection = edgeDirection;
+  elements.leftPageDrop.classList.toggle("active", edgeDirection < 0);
+  elements.rightPageDrop.classList.toggle("active", edgeDirection > 0);
+  const pageIndex = state.pages.indexOf(page);
+  elements.leftPageDrop.querySelector("span").textContent = pageIndex > 0 ? "前のページへ移動" : "最初のページです";
+  elements.rightPageDrop.querySelector("span").textContent = pageIndex < state.pages.length - 1 ? "次のページへ移動" : state.pages.length < MAX_PAGES ? "新しいページへ移動" : "最後のページです";
   const collisions = visibleKeys(page).filter((key) => key !== dragSession.key && page.layout[key] && overlaps(next, page.layout[key]));
   const sourceKind = itemKind(dragSession.key);
-  const folderTarget = dragSession.mode === "move" && sourceKind === "shortcut" ? collisions.find((key) => ["shortcut", "folder"].includes(itemKind(key))) || "" : "";
+  const folderTarget = !edgeDirection && dragSession.mode === "move" && sourceKind === "shortcut" ? collisions.find((key) => ["shortcut", "folder"].includes(itemKind(key))) || "" : "";
   document.querySelectorAll(".drop-target").forEach((node) => node.classList.remove("drop-target"));
   if (folderTarget) elements.homeGrid.querySelector(`[data-key="${cssEscape(folderTarget)}"]`)?.classList.add("drop-target");
   dragSession.folderTarget = folderTarget;
@@ -658,9 +662,18 @@ function finishGridDrag(event) {
   session.item.classList.remove("drag-active");
   elements.body.classList.remove("dragging");
   elements.gridGhost.hidden = true;
+  elements.leftPageDrop.classList.remove("active");
+  elements.rightPageDrop.classList.remove("active");
   document.querySelectorAll(".drop-target").forEach((node) => node.classList.remove("drop-target"));
   if (session.moved) suppressShortcutClickUntil = Date.now() + 350;
   const before = captureItemPositions();
+  const movedAcrossPage = session.edgeDirection ? moveDraggedItemAcrossPage(session, session.edgeDirection) : false;
+  if (movedAcrossPage) {
+    renderHome();
+    renderPageManager();
+    requestAnimationFrame(() => animateCurrentPageIn(session.edgeDirection));
+    return;
+  }
   if (session.folderTarget) createFolderFromDrop(session.key, session.folderTarget);
   else {
     activePage().layout[session.key] = session.next;
@@ -682,8 +695,32 @@ function animateFromPositions(before) {
     const dx = previous.left - current.left;
     const dy = previous.top - current.top;
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-    item.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }], { duration: 230, easing: "cubic-bezier(.2,.8,.2,1)" });
+    item.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }], { duration: motionDuration(230), easing: "cubic-bezier(.2,.8,.2,1)" });
   });
+}
+
+function moveDraggedItemAcrossPage(session, direction) {
+  const source = activePage();
+  const sourceIndex = state.pages.indexOf(source);
+  let destination = state.pages[sourceIndex + direction];
+  if (!destination && direction > 0 && state.pages.length < MAX_PAGES) {
+    destination = { id: `page-${Date.now().toString(36)}`, name: `ページ${state.pages.length + 1}`, order: [], layout: {} };
+    state.pages.push(destination);
+  }
+  if (!destination) {
+    showToast(direction < 0 ? "これより前のページはありません" : `ページは${MAX_PAGES}個までです`);
+    return false;
+  }
+  source.order = source.order.filter((key) => key !== session.key);
+  delete source.layout[session.key];
+  destination.order.push(session.key);
+  destination.layout[session.key] = findOpenRect(session.next.w, session.next.h, destination, "", Math.max(0, session.next.y));
+  settleLayout(source);
+  settleLayout(destination, session.key);
+  state.activePageId = destination.id;
+  commitMaybe();
+  showToast(`「${destination.name}」へ移動しました`);
+  return true;
 }
 
 function renderPageNavigation() {
@@ -694,7 +731,11 @@ function renderPageNavigation() {
     button.className = `page-dot${page.id === state.activePageId ? " active" : ""}`;
     button.setAttribute("aria-label", page.name);
     button.setAttribute("aria-current", page.id === state.activePageId ? "page" : "false");
-    button.addEventListener("click", () => switchPage(page.id));
+    button.addEventListener("click", () => {
+      const currentIndex = state.pages.findIndex((item) => item.id === state.activePageId);
+      const targetIndex = state.pages.findIndex((item) => item.id === page.id);
+      switchPage(page.id, Math.sign(targetIndex - currentIndex));
+    });
     elements.pageDots.appendChild(button);
   });
   const index = state.pages.findIndex((page) => page.id === state.activePageId);
@@ -703,34 +744,106 @@ function renderPageNavigation() {
   elements.pageNavigation.hidden = state.pages.length <= 1 && !isEditing;
 }
 
-function switchPageBy(delta) {
+function switchPageBy(delta, startOffset = 0) {
   const index = state.pages.findIndex((page) => page.id === state.activePageId);
   const target = state.pages[index + delta];
-  if (target) switchPage(target.id, delta);
+  if (target) switchPage(target.id, delta, startOffset);
+  else resetSwipeStage(startOffset);
 }
 
-function switchPage(id, direction = 0) {
+async function switchPage(id, direction = 0, startOffset = 0) {
   if (id === state.activePageId || !state.pages.some((page) => page.id === id)) return;
+  const currentIndex = state.pages.findIndex((page) => page.id === state.activePageId);
+  const targetIndex = state.pages.findIndex((page) => page.id === id);
+  direction ||= Math.sign(targetIndex - currentIndex) || 1;
+  pageAnimation?.cancel();
+  pageAnimation = null;
+  elements.body.classList.remove("page-swiping");
+  elements.homeStage.style.transform = "";
+  elements.homeStage.style.opacity = "";
+  if (motionDuration(240) > 1 && typeof elements.homeStage.animate === "function") {
+    const distance = motionDistance(Math.min(window.innerWidth * .3, 340));
+    pageAnimation = elements.homeStage.animate([
+      { transform: `translate3d(${startOffset}px,0,0)`, opacity: Math.max(.5, 1 - Math.abs(startOffset) / Math.max(window.innerWidth, 1) * .55) },
+      { transform: `translate3d(${-direction * distance}px,0,0)`, opacity: .08 }
+    ], { duration: motionDuration(210), easing: "cubic-bezier(.32,.72,0,1)", fill: "forwards" });
+    try { await pageAnimation.finished; } catch { return; }
+  }
   state.activePageId = id;
   saveState();
-  elements.homeStage.classList.remove("page-enter-left", "page-enter-right");
-  void elements.homeStage.offsetWidth;
-  elements.homeStage.classList.add(direction < 0 ? "page-enter-right" : "page-enter-left");
   renderHome();
   renderPageManager();
+  pageAnimation?.cancel();
+  pageAnimation = null;
+  animateCurrentPageIn(direction);
 }
 
 function beginPageSwipe(event) {
   if (isEditing || event.target.closest("button,input,select,.suggestions")) return;
-  swipeSession = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  pageAnimation?.cancel();
+  pageAnimation = null;
+  swipeSession = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, horizontal: false, startedAt: performance.now() };
+}
+
+function updatePageSwipe(event) {
+  if (!swipeSession || event.pointerId !== swipeSession.id) return;
+  const dx = event.clientX - swipeSession.x;
+  const dy = event.clientY - swipeSession.y;
+  if (!swipeSession.horizontal) {
+    if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.12) return;
+    swipeSession.horizontal = true;
+    elements.homeStage.setPointerCapture?.(event.pointerId);
+    elements.body.classList.add("page-swiping");
+  }
+  event.preventDefault();
+  const index = state.pages.findIndex((page) => page.id === state.activePageId);
+  const atBoundary = (dx > 0 && index === 0) || (dx < 0 && index === state.pages.length - 1);
+  swipeSession.dx = atBoundary ? dx * .28 : dx;
+  elements.homeStage.style.transform = `translate3d(${swipeSession.dx}px,0,0)`;
+  elements.homeStage.style.opacity = String(Math.max(.5, 1 - Math.abs(swipeSession.dx) / Math.max(window.innerWidth, 1) * .55));
 }
 
 function finishPageSwipe(event) {
   if (!swipeSession || event.pointerId !== swipeSession.id) return;
-  const dx = event.clientX - swipeSession.x;
-  const dy = event.clientY - swipeSession.y;
+  const session = swipeSession;
   swipeSession = null;
-  if (Math.abs(dx) > 72 && Math.abs(dx) > Math.abs(dy) * 1.25) switchPageBy(dx < 0 ? 1 : -1);
+  if (!session.horizontal) return;
+  const elapsed = Math.max(1, performance.now() - session.startedAt);
+  const velocity = Math.abs(session.dx) / elapsed;
+  const threshold = Math.min(116, window.innerWidth * .15);
+  const direction = session.dx < 0 ? 1 : -1;
+  const index = state.pages.findIndex((page) => page.id === state.activePageId);
+  const hasTarget = Boolean(state.pages[index + direction]);
+  if (hasTarget && (Math.abs(session.dx) >= threshold || velocity > .48)) switchPageBy(direction, session.dx);
+  else resetSwipeStage(session.dx);
+}
+
+function cancelPageSwipe() {
+  const offset = swipeSession?.dx || 0;
+  swipeSession = null;
+  resetSwipeStage(offset);
+}
+
+function resetSwipeStage(offset = 0) {
+  elements.body.classList.remove("page-swiping");
+  elements.homeStage.style.transform = "";
+  elements.homeStage.style.opacity = "";
+  if (!offset || motionDuration(220) <= 1 || typeof elements.homeStage.animate !== "function") return;
+  pageAnimation?.cancel();
+  pageAnimation = elements.homeStage.animate([
+    { transform: `translate3d(${offset}px,0,0)`, opacity: Math.max(.5, 1 - Math.abs(offset) / Math.max(window.innerWidth, 1) * .55) },
+    { transform: "translate3d(0,0,0)", opacity: 1 }
+  ], { duration: motionDuration(260), easing: "cubic-bezier(.32,.72,0,1)" });
+}
+
+function animateCurrentPageIn(direction) {
+  if (motionDuration(320) <= 1 || typeof elements.homeStage.animate !== "function") return;
+  pageAnimation?.cancel();
+  const distance = motionDistance(Math.min(window.innerWidth * .22, 270));
+  pageAnimation = elements.homeStage.animate([
+    { transform: `translate3d(${direction * distance}px,0,0) scale(.985)`, opacity: .12 },
+    { transform: "translate3d(0,0,0) scale(1)", opacity: 1 }
+  ], { duration: motionDuration(350), easing: "cubic-bezier(.2,.84,.18,1)" });
 }
 
 function handlePageWheel(event) {
@@ -784,24 +897,6 @@ function deletePage(pageId) {
   syncSettingsControls();
 }
 
-function sendItemToNextPage(key) {
-  const source = findItemPage(key);
-  if (!source) return;
-  pushUndo();
-  if (state.pages.length === 1) state.pages.push({ id: `page-${Date.now().toString(36)}`, name: "ページ2", order: [], layout: {} });
-  const sourceIndex = state.pages.indexOf(source);
-  const destination = state.pages[(sourceIndex + 1) % state.pages.length];
-  const rect = source.layout[key] || { w: 2, h: 2 };
-  source.order = source.order.filter((item) => item !== key);
-  delete source.layout[key];
-  destination.order.push(key);
-  destination.layout[key] = findOpenRect(rect.w, rect.h, destination);
-  settleLayout(destination, key);
-  commitMaybe();
-  renderHome();
-  showToast(`「${destination.name}」へ移動しました`);
-}
-
 function createFolderFromDrop(sourceKey, targetKey) {
   const source = state.shortcuts.find((item) => shortcutKey(item.id) === sourceKey);
   const page = activePage();
@@ -835,13 +930,26 @@ function createFolderFromDrop(sourceKey, targetKey) {
 function openFolderDialog(id) {
   const folder = state.folders.find((item) => item.id === id);
   if (!folder) return;
+  clearTimeout(folderCloseTimer);
   openFolderId = id;
   elements.folderName.value = folder.name;
+  elements.folderName.readOnly = !isEditing;
+  elements.folderDialog.dataset.editing = String(isEditing);
+  elements.folderHint.textContent = isEditing ? "ドラッグで並べ替え、×でホーム画面へ戻せます" : "アイコンを押すとすぐに開きます";
   renderFolderDialogItems();
-  elements.folderDialog.showModal();
+  if (!elements.folderDialog.open) elements.folderDialog.showModal();
+  requestAnimationFrame(() => elements.folderDialog.classList.add("folder-visible"));
 }
 
-function closeFolderDialog() { if (elements.folderDialog.open) elements.folderDialog.close(); openFolderId = ""; folderDragId = ""; }
+function closeFolderDialog() {
+  clearTimeout(folderCloseTimer);
+  elements.folderDialog.classList.remove("folder-visible");
+  openFolderId = "";
+  folderDragId = "";
+  if (!elements.folderDialog.open) return;
+  if (motionDuration(324) <= 1) elements.folderDialog.close();
+  else folderCloseTimer = setTimeout(() => { if (elements.folderDialog.open) elements.folderDialog.close(); }, motionDuration(324));
+}
 
 function renderFolderDialogItems() {
   const folder = state.folders.find((item) => item.id === openFolderId);
@@ -849,12 +957,14 @@ function renderFolderDialogItems() {
   folder?.shortcutIds.forEach((id) => {
     const shortcut = state.shortcuts.find((item) => item.id === id);
     if (!shortcut) return;
-    const row = document.createElement("div");
-    row.className = "folder-dialog-row";
-    row.draggable = true;
-    row.dataset.shortcutId = id;
-    row.innerHTML = `<span class="mini-app" style="background:${safeColor(shortcut.color)}">${escapeHtml(firstCharacter(shortcut.name))}</span><strong>${escapeHtml(shortcut.name)}</strong><span class="folder-row-actions"><button type="button" data-folder-shift="-1" data-shortcut-id="${escapeHtml(id)}" aria-label="上へ">↑</button><button type="button" data-folder-shift="1" data-shortcut-id="${escapeHtml(id)}" aria-label="下へ">↓</button><button type="button" data-folder-remove="${escapeHtml(id)}">外へ</button></span>`;
-    elements.folderDialogItems.appendChild(row);
+    const app = document.createElement("div");
+    app.className = "folder-app";
+    app.draggable = isEditing;
+    app.dataset.shortcutId = id;
+    app.innerHTML = `<button class="folder-app-link" type="button" data-folder-open="${escapeHtml(id)}" aria-label="${escapeHtml(shortcut.name)}を開く"><span class="folder-app-icon" style="--shortcut-color:${safeColor(shortcut.color)}"><span>${escapeHtml(firstCharacter(shortcut.name))}</span><img src="${faviconUrl(shortcut.url)}" alt=""></span><strong>${escapeHtml(shortcut.name)}</strong></button>${isEditing ? `<button class="folder-app-remove" type="button" data-folder-remove="${escapeHtml(id)}" aria-label="${escapeHtml(shortcut.name)}をフォルダから外す">×</button>` : ""}`;
+    const image = app.querySelector("img");
+    image.addEventListener("error", () => image.remove(), { once: true });
+    elements.folderDialogItems.appendChild(app);
   });
 }
 
@@ -907,15 +1017,12 @@ function handleFolderDrop(event) {
 }
 
 function handleFolderItemsClick(event) {
-  const shiftButton = event.target.closest("[data-folder-shift]");
-  if (shiftButton) {
-    const folder = state.folders.find((item) => item.id === openFolderId);
-    const id = shiftButton.dataset.shortcutId;
-    const from = folder?.shortcutIds.indexOf(id) ?? -1;
-    const to = Math.max(0, Math.min((folder?.shortcutIds.length || 1) - 1, from + Number(shiftButton.dataset.folderShift)));
-    if (folder && from >= 0 && from !== to) {
-      folder.shortcutIds.splice(to, 0, folder.shortcutIds.splice(from, 1)[0]);
-      saveState(); renderFolderDialogItems(); renderHome();
+  const openButton = event.target.closest("[data-folder-open]");
+  if (openButton && !isEditing) {
+    const shortcut = state.shortcuts.find((item) => item.id === openButton.dataset.folderOpen);
+    if (shortcut) {
+      closeFolderDialog();
+      window.location.href = shortcut.url;
     }
     return;
   }
@@ -925,14 +1032,15 @@ function handleFolderItemsClick(event) {
   const page = findItemPage(folderKey(openFolderId));
   const shortcut = state.shortcuts.find((item) => item.id === id);
   if (!folder || !page || !shortcut) return;
+  pushUndo();
   folder.shortcutIds = folder.shortcutIds.filter((item) => item !== id);
   shortcut.folderId = "";
   const key = shortcutKey(id);
   page.order.push(key);
   page.layout[key] = findOpenRect(Math.min(2, state.grid.columns), 2, page);
-  saveState();
   if (!folder.shortcutIds.length) { state.folders = state.folders.filter((item) => item.id !== folder.id); page.order = page.order.filter((item) => item !== folderKey(folder.id)); delete page.layout[folderKey(folder.id)]; closeFolderDialog(); }
   else renderFolderDialogItems();
+  saveState();
   renderHome();
 }
 
@@ -956,16 +1064,15 @@ function applyLayoutTemplate(name) {
   const page = activePage();
   if (name === "study") {
     Object.assign(state.grid, GRID_PRESETS.standard);
-    Object.assign(state.search, { enabled: true }); Object.assign(state.clock, { enabled: true }); Object.assign(state.timetable, { enabled: true }); Object.assign(state.weather, { enabled: true }); Object.assign(state.agenda, { enabled: true });
-    moveCoreWidgetsToPage(page, ["search", "clock", "timetable", "weather", "agenda"]);
+    Object.assign(state.search, { enabled: true }); Object.assign(state.clock, { enabled: true }); Object.assign(state.timetable, { enabled: true }); Object.assign(state.weather, { enabled: true });
+    moveCoreWidgetsToPage(page, ["search", "clock", "timetable", "weather"]);
     page.layout.search = { x: 0, y: 0, w: 12, h: 1 };
     page.layout.timetable = { x: 0, y: 1, w: 8, h: 4 };
     page.layout.weather = { x: 8, y: 1, w: 4, h: 3 };
     page.layout.clock = { x: 8, y: 4, w: 4, h: 2 };
-    page.layout.agenda = { x: 0, y: 5, w: 8, h: 3 };
   } else if (name === "shortcuts") {
     Object.assign(state.grid, GRID_PRESETS.compact);
-    state.search.enabled = true; state.clock.enabled = true; state.weather.enabled = false; state.timetable.enabled = false; state.agenda.enabled = false;
+    state.search.enabled = true; state.clock.enabled = true; state.weather.enabled = false; state.timetable.enabled = false;
     moveCoreWidgetsToPage(page, ["search", "clock"]);
     page.layout.search = { x: 0, y: 0, w: 12, h: 1 };
     page.layout.clock = { x: 12, y: 0, w: 4, h: 2 };
@@ -973,7 +1080,7 @@ function applyLayoutTemplate(name) {
     page.order.filter((key) => ["shortcut", "folder"].includes(itemKind(key))).forEach((key) => { page.layout[key] = { x: (index * 2) % 16, y: 2 + Math.floor(index / 8) * 2, w: 2, h: 2 }; index += 1; });
   } else if (name === "simple") {
     Object.assign(state.grid, GRID_PRESETS.large);
-    state.search.enabled = true; state.clock.enabled = true; state.weather.enabled = true; state.timetable.enabled = false; state.agenda.enabled = false;
+    state.search.enabled = true; state.clock.enabled = true; state.weather.enabled = true; state.timetable.enabled = false;
     moveCoreWidgetsToPage(page, ["search", "clock", "weather"]);
     page.layout.search = { x: 0, y: 0, w: 8, h: 1 };
     page.layout.clock = { x: 0, y: 1, w: 4, h: 3 };
@@ -1004,6 +1111,8 @@ function syncSettingsControls() {
   elements.widgetOpacityValue.textContent = `${state.appearance.widgetOpacity}%`;
   elements.wallpaperShade.value = String(state.appearance.wallpaperShade);
   elements.wallpaperShadeValue.textContent = `${state.appearance.wallpaperShade}%`;
+  elements.motionStrength.value = String(state.appearance.motionStrength);
+  elements.motionStrengthValue.textContent = `${state.appearance.motionStrength}%`;
   elements.autoTheme.checked = state.appearance.autoTheme;
   elements.manualThemes.disabled = state.appearance.autoTheme;
   const theme = elements.manualThemes.querySelector(`[name="manualTheme"][value="${state.appearance.manualTheme}"]`);
@@ -1012,7 +1121,6 @@ function syncSettingsControls() {
   elements.clockEnabled.checked = state.clock.enabled;
   elements.timetableEnabled.checked = state.timetable.enabled;
   elements.weatherEnabled.checked = state.weather.enabled;
-  elements.agendaEnabled.checked = state.agenda.enabled;
   elements.clockType.value = state.clock.type;
   elements.clock24Hour.checked = state.clock.is24Hour;
   elements.classSelect.value = state.timetable.className;
@@ -1024,7 +1132,6 @@ function syncSettingsControls() {
   elements.removeWallpaper.disabled = !state.appearance.hasWallpaper;
   elements.gridPresets.querySelectorAll("[data-grid-preset]").forEach((button) => { const preset = GRID_PRESETS[button.dataset.gridPreset]; button.classList.toggle("active", preset.columns === state.grid.columns && preset.rowHeight === state.grid.rowHeight && preset.gap === state.grid.gap); });
   renderPageManager();
-  renderAgendaManager();
   renderSavedLayoutManager();
   populateFolderSelect();
   syncCustomStyleControls();
@@ -1150,7 +1257,7 @@ async function importSettings() {
     if (!window.confirm("現在の設定を読み込んだ内容で置き換えますか？")) return;
     state = mergeV3(imported, createDefaultState());
     sanitizeState();
-    applyGridSettings(); applyAppearance(); renderHome(); syncSettingsControls(); renderTimetable(); renderAgenda(); fetchWeather(true);
+    applyGridSettings(); applyAppearance(); renderHome(); syncSettingsControls(); renderTimetable(); fetchWeather(true);
     showToast("設定を読み込みました");
   } catch (error) { console.warn(error); showToast("このJSONは読み込めませんでした"); }
 }
@@ -1603,73 +1710,12 @@ function setWeatherFromCurrentLocation() {
 function readCache(key, validator) { try { const item = JSON.parse(localStorage.getItem(key)); return validator(item) ? item : null; } catch { return null; } }
 function formatCacheTime(timestamp) { return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp)); }
 
-function openAgendaSettings() {
-  syncSettingsControls();
-  if (!elements.settingsDialog.open) elements.settingsDialog.showModal();
-  requestAnimationFrame(() => elements.agendaSettingsSection.scrollIntoView({ behavior: "smooth", block: "start" }));
-}
-
-function addAgendaItem() {
-  const title = elements.agendaTitle.value.trim();
-  const date = elements.agendaDate.value;
-  if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return showToast("予定名と日付を入力してください");
-  state.agenda.items.push({ id: `event-${Date.now().toString(36)}`, title: title.slice(0, 32), date, createdAt: Date.now() });
-  elements.agendaTitle.value = ""; elements.agendaDate.value = "";
-  saveState(); renderAgenda(); renderAgendaManager(); showToast("予定を追加しました");
-}
-
-function agendaDays(dateString) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const target = new Date(`${dateString}T00:00:00`);
-  return Math.round((target - today) / 86400000);
-}
-
-function sortedAgendaItems(includePast = false) {
-  return [...state.agenda.items].filter((item) => includePast || agendaDays(item.date) >= 0).sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
-}
-
-function renderAgenda() {
-  const items = sortedAgendaItems().slice(0, 8);
-  if (!items.length) { elements.agendaContent.innerHTML = '<div class="agenda-empty">予定はありません<br>＋から追加できます</div>'; return; }
-  const list = document.createElement("div"); list.className = "agenda-list";
-  items.forEach((item) => {
-    const days = agendaDays(item.date);
-    const row = document.createElement("div"); row.className = "agenda-item";
-    const count = days === 0 ? "今日" : days === 1 ? "明日" : `<strong>${days}</strong>日後`;
-    row.innerHTML = `<span class="agenda-count">${count}</span><span class="agenda-copy"><strong>${escapeHtml(item.title)}</strong><span>${new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric", weekday: "short" }).format(new Date(`${item.date}T12:00:00`))}</span></span>`;
-    list.appendChild(row);
-  });
-  elements.agendaContent.replaceChildren(list);
-}
-
-function renderAgendaManager() {
-  elements.agendaManager.replaceChildren();
-  sortedAgendaItems(true).forEach((item) => {
-    const row = document.createElement("div"); row.className = "manage-row";
-    row.innerHTML = `<div class="manage-row-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.date)}${agendaDays(item.date) < 0 ? "・終了" : ""}</span></div><div class="manage-row-actions"><button type="button" data-agenda-action="edit" data-agenda-id="${escapeHtml(item.id)}">編集</button><button type="button" data-agenda-action="delete" data-agenda-id="${escapeHtml(item.id)}">削除</button></div>`;
-    elements.agendaManager.appendChild(row);
-  });
-}
-
-function handleAgendaManagerClick(event) {
-  const button = event.target.closest("[data-agenda-action]");
-  if (!button) return;
-  const item = state.agenda.items.find((entry) => entry.id === button.dataset.agendaId);
-  if (!item) return;
-  if (button.dataset.agendaAction === "delete") state.agenda.items = state.agenda.items.filter((entry) => entry.id !== item.id);
-  else {
-    const title = window.prompt("予定名", item.title)?.trim();
-    const date = window.prompt("日付（YYYY-MM-DD）", item.date)?.trim();
-    if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return;
-    item.title = title.slice(0, 32); item.date = date;
-  }
-  saveState(); renderAgenda(); renderAgendaManager();
-}
-
 function applyAppearance() {
   const style = document.documentElement.style;
   style.setProperty("--widget-opacity", String(state.appearance.widgetOpacity / 100));
   style.setProperty("--wallpaper-shade", String(state.appearance.wallpaperShade / 100));
+  style.setProperty("--wallpaper-shade-top", String(state.appearance.wallpaperShade / 100 * .48));
+  style.setProperty("--wallpaper-shade-bottom", String(state.appearance.wallpaperShade / 100 * .28));
   const palette = state.appearance.autoTheme ? state.appearance.autoPalette : null;
   if (palette) {
     elements.body.dataset.theme = "auto";
@@ -1687,7 +1733,26 @@ function applyAppearance() {
   }
   const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent-rgb").trim();
   document.querySelector('meta[name="theme-color"]').content = rgbStringToHex(accent);
+  applyMotionSettings();
   applyWidgetStyles();
+}
+
+function prefersReducedMotion() { return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches; }
+function motionScale() { return prefersReducedMotion() ? 0 : state.appearance.motionStrength / 100; }
+function motionDuration(base) { const scale = motionScale(); return scale <= 0 ? 1 : Math.round(base * (.48 + scale * .72)); }
+function motionDistance(base) { return Math.round(base * (.32 + motionScale() * .68)); }
+function applyMotionSettings() {
+  const scale = motionScale();
+  const style = document.documentElement.style;
+  style.setProperty("--motion-strength", String(scale));
+  style.setProperty("--motion-duration", `${motionDuration(300)}ms`);
+  style.setProperty("--motion-fast", `${motionDuration(174)}ms`);
+  style.setProperty("--motion-slow", `${motionDuration(324)}ms`);
+  style.setProperty("--motion-distance", `${motionDistance(24)}px`);
+  style.setProperty("--motion-wiggle", `${(scale * .78).toFixed(2)}deg`);
+  style.setProperty("--motion-wiggle-neg", `${(-scale * .78).toFixed(2)}deg`);
+  style.setProperty("--wiggle-duration", `${Math.round(350 - scale * 180)}ms`);
+  style.setProperty("--press-scale", String((1 - scale * .045).toFixed(3)));
 }
 
 async function openWallpaperDatabase() {
@@ -1792,12 +1857,12 @@ function populateClassSelect() {
 }
 
 async function resetHome() {
-  if (!window.confirm("壁紙、予定、ショートカット、配置、設定をすべて初期状態に戻しますか？")) return;
+  if (!window.confirm("壁紙、ショートカット、配置、設定をすべて初期状態に戻しますか？")) return;
   try { await wallpaperDatabaseAction("delete"); } catch (error) { console.warn(error); }
   if (wallpaperObjectUrl) URL.revokeObjectURL(wallpaperObjectUrl);
   wallpaperObjectUrl = ""; elements.wallpaperLayer.style.backgroundImage = "";
   state = createDefaultState(); selectedDayOffset = getAutomaticDayOffset(); timetableDayWasSelected = false; undoStack = [];
-  sanitizeState(); applyGridSettings(); applyAppearance(); renderHome(); syncSettingsControls(); renderAgenda(); renderTimetable(); fetchWeather(true); showToast("ホーム画面を初期状態に戻しました");
+  sanitizeState(); applyGridSettings(); applyAppearance(); renderHome(); syncSettingsControls(); renderTimetable(); fetchWeather(true); showToast("ホーム画面を初期状態に戻しました");
 }
 
 function showToast(message) {

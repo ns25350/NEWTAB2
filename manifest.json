@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Home Grid New Tab",
-  "version": "0.3.0",
-  "description": "時間割、天気、学校予定、フォルダ、複数ページを自由に配置できるiOS風の新しいタブページです。",
+  "version": "0.4.0",
+  "description": "時間割、天気、フォルダ、複数ページを自由に配置できるiPad・Liquid Glass風の新しいタブページです。",
   "permissions": [
     "geolocation"
   ],

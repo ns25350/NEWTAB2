@@ -30,8 +30,7 @@
 
       <article class="grid-item search-item" data-key="search">
         <div class="item-edit-chrome">
-          <button class="item-remove" type="button" data-hide-widget="search" aria-label="検索を非表示">−</button>
-          <button class="page-move" type="button" data-send-next-page="search" aria-label="検索を次のページへ">›</button>
+          <button class="item-remove" type="button" data-hide-widget="search" aria-label="検索を非表示">×</button>
           <button class="drag-grip" type="button" aria-label="検索を移動"><span></span></button>
           <span class="size-badge">—</span>
         </div>
@@ -46,8 +45,7 @@
 
       <article class="grid-item widget clock-widget" data-key="clock">
         <div class="item-edit-chrome">
-          <button class="item-remove" type="button" data-hide-widget="clock" aria-label="時計を非表示">−</button>
-          <button class="page-move" type="button" data-send-next-page="clock" aria-label="時計を次のページへ">›</button>
+          <button class="item-remove" type="button" data-hide-widget="clock" aria-label="時計を非表示">×</button>
           <button class="drag-grip" type="button" aria-label="時計を移動"><span></span></button>
           <span class="size-badge">—</span>
         </div>
@@ -67,8 +65,7 @@
 
       <article class="grid-item widget timetable-widget" data-key="timetable">
         <div class="item-edit-chrome">
-          <button class="item-remove" type="button" data-hide-widget="timetable" aria-label="時間割を非表示">−</button>
-          <button class="page-move" type="button" data-send-next-page="timetable" aria-label="時間割を次のページへ">›</button>
+          <button class="item-remove" type="button" data-hide-widget="timetable" aria-label="時間割を非表示">×</button>
           <button class="drag-grip" type="button" aria-label="時間割を移動"><span></span></button>
           <span class="size-badge">—</span>
         </div>
@@ -86,8 +83,7 @@
 
       <article class="grid-item widget weather-widget" data-key="weather">
         <div class="item-edit-chrome">
-          <button class="item-remove" type="button" data-hide-widget="weather" aria-label="天気を非表示">−</button>
-          <button class="page-move" type="button" data-send-next-page="weather" aria-label="天気を次のページへ">›</button>
+          <button class="item-remove" type="button" data-hide-widget="weather" aria-label="天気を非表示">×</button>
           <button class="drag-grip" type="button" aria-label="天気を移動"><span></span></button>
           <span class="size-badge">—</span>
         </div>
@@ -96,17 +92,6 @@
         <button class="resize-handle" type="button" aria-label="天気の大きさを変更"><span></span></button>
       </article>
 
-      <article class="grid-item widget agenda-widget" data-key="agenda">
-        <div class="item-edit-chrome">
-          <button class="item-remove" type="button" data-hide-widget="agenda" aria-label="予定を非表示">−</button>
-          <button class="page-move" type="button" data-send-next-page="agenda" aria-label="予定を次のページへ">›</button>
-          <button class="drag-grip" type="button" aria-label="予定を移動"><span></span></button>
-          <span class="size-badge">—</span>
-        </div>
-        <header class="agenda-header"><div><span class="widget-kicker">UPCOMING</span><h2>学校予定</h2></div><button class="widget-icon-button" id="openAgendaSettings" type="button" aria-label="予定を追加">＋</button></header>
-        <div class="agenda-content" id="agendaContent"></div>
-        <button class="resize-handle" type="button" aria-label="予定の大きさを変更"><span></span></button>
-      </article>
     </section>
   </main>
 
@@ -114,8 +99,11 @@
     <button id="previousPage" type="button" aria-label="前のページ">‹</button><div class="page-dots" id="pageDots"></div><button id="nextPage" type="button" aria-label="次のページ">›</button>
   </nav>
 
+  <div class="page-edge-drop edge-left" id="leftPageDrop" aria-hidden="true"><span>前のページへ</span></div>
+  <div class="page-edge-drop edge-right" id="rightPageDrop" aria-hidden="true"><span>次のページへ</span></div>
+
   <div class="edit-toolbar" id="editToolbar" hidden><button id="undoButton" type="button" disabled>↶ 元に戻す</button><span>重ねるとフォルダ</span></div>
-  <div class="edit-guide" id="editGuide" hidden><span>ドラッグで移動</span><i></i><span>右下でサイズ変更</span><i></i><span>› で次ページ</span></div>
+  <div class="edit-guide" id="editGuide" hidden><span>ドラッグで移動</span><i></i><span>右下でサイズ変更</span><i></i><span>左右の端へ運ぶとページ移動</span></div>
 
   <dialog class="sheet settings-sheet" id="settingsDialog">
     <form class="sheet-panel" id="settingsForm">
@@ -132,7 +120,7 @@
       </section>
 
       <section class="settings-card">
-        <div class="section-title"><div><h3>ホーム画面のページ</h3><p>横スワイプや左右ボタンで切り替えます。</p></div></div>
+        <div class="section-title"><div><h3>ホーム画面のページ</h3><p>iPadのように横スワイプで切り替えます。</p></div></div>
         <div class="compact-form"><input id="newPageName" maxlength="18" placeholder="ページ名"><button class="primary-action" id="addPageButton" type="button">追加</button></div>
         <div class="manage-list" id="pageManager"></div>
       </section>
@@ -144,6 +132,7 @@
         <fieldset class="manual-themes" id="manualThemes"><legend>手動テーマ</legend><label class="theme-choice silver"><input type="radio" name="manualTheme" value="silver"><span></span><small>Silver</small></label><label class="theme-choice ocean"><input type="radio" name="manualTheme" value="ocean"><span></span><small>Ocean</small></label><label class="theme-choice rose"><input type="radio" name="manualTheme" value="rose"><span></span><small>Rose</small></label><label class="theme-choice graphite"><input type="radio" name="manualTheme" value="graphite"><span></span><small>Dark</small></label></fieldset>
         <label class="range-row" for="widgetOpacity"><span>標準の透明度</span><output id="widgetOpacityValue">82%</output></label><input class="range-input" id="widgetOpacity" type="range" min="52" max="96" step="1">
         <label class="range-row" for="wallpaperShade"><span>壁紙の暗さ</span><output id="wallpaperShadeValue">18%</output></label><input class="range-input" id="wallpaperShade" type="range" min="0" max="55" step="1">
+        <label class="range-row" for="motionStrength"><span>アニメーションの強さ</span><output id="motionStrengthValue">70%</output></label><input class="range-input" id="motionStrength" type="range" min="0" max="100" step="5">
       </section>
 
       <section class="settings-card">
@@ -153,7 +142,6 @@
           <label><span>時計</span><span class="switch"><input type="checkbox" id="clockEnabled"><span></span></span></label>
           <label><span>時間割</span><span class="switch"><input type="checkbox" id="timetableEnabled"><span></span></span></label>
           <label><span>天気</span><span class="switch"><input type="checkbox" id="weatherEnabled"><span></span></span></label>
-          <label><span>学校予定</span><span class="switch"><input type="checkbox" id="agendaEnabled"><span></span></span></label>
         </div>
         <div class="two-fields"><div><label class="select-label" for="clockType">時計の種類</label><select id="clockType"><option value="digital">デジタル</option><option value="analog">アナログ</option></select></div><div class="setting-row inline-switch"><div><h4>24時間表示</h4></div><label class="switch"><input type="checkbox" id="clock24Hour"><span></span></label></div></div>
       </section>
@@ -182,16 +170,9 @@
         <button class="secondary-action full-action" id="clearSearchHistory" type="button">検索履歴を消去</button>
       </section>
 
-      <section class="settings-card" id="agendaSettingsSection">
-        <div class="section-title"><div><h3>学校予定・カウントダウン</h3><p>テスト、提出、行事などを登録できます。</p></div></div>
-        <input id="agendaTitle" maxlength="32" placeholder="予定名">
-        <div class="compact-form"><input id="agendaDate" type="date"><button class="primary-action" id="addAgendaItem" type="button">追加</button></div>
-        <div class="manage-list" id="agendaManager"></div>
-      </section>
-
       <section class="settings-card">
         <div class="section-title"><div><h3>ウィジェットごとの外観</h3><p>標準テーマから個別に上書きできます。</p></div></div>
-        <label class="select-label" for="styleTarget">対象</label><select id="styleTarget"><option value="search">検索</option><option value="clock">時計</option><option value="timetable">時間割</option><option value="weather">天気</option><option value="agenda">学校予定</option></select>
+        <label class="select-label" for="styleTarget">対象</label><select id="styleTarget"><option value="search">検索</option><option value="clock">時計</option><option value="timetable">時間割</option><option value="weather">天気</option></select>
         <div class="setting-row"><div><h4>個別設定を使用</h4></div><label class="switch"><input type="checkbox" id="customStyleEnabled"><span></span></label></div>
         <fieldset id="customStyleControls">
           <label class="range-row" for="customOpacity"><span>透明度</span><output id="customOpacityValue">82%</output></label><input class="range-input" id="customOpacity" type="range" min="35" max="100">
@@ -224,12 +205,15 @@
     </form>
   </dialog>
 
-  <dialog class="sheet folder-sheet" id="folderDialog">
-    <form class="sheet-panel" id="folderForm">
-      <header class="sheet-header"><div><span class="sheet-kicker">FOLDER</span><h2>フォルダ</h2></div><button class="close-button" id="closeFolderDialog" type="button" aria-label="閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg></button></header>
-      <label class="select-label" for="folderName">フォルダ名</label><input id="folderName" maxlength="24">
-      <p class="drag-note">項目をドラッグして並べ替えられます。</p><div class="folder-dialog-items" id="folderDialogItems"></div>
-      <div class="dialog-actions"><button class="delete-action" id="deleteFolder" type="button">フォルダを解除</button><span></span><button class="primary-action" id="saveFolder" type="submit">保存</button></div>
+  <dialog class="folder-overlay" id="folderDialog">
+    <form class="folder-glass" id="folderForm">
+      <header class="folder-header">
+        <input id="folderName" maxlength="24" aria-label="フォルダ名">
+        <button class="folder-close" id="closeFolderDialog" type="button" aria-label="フォルダを閉じる">完了</button>
+      </header>
+      <div class="folder-dialog-items" id="folderDialogItems"></div>
+      <p class="folder-hint" id="folderHint">アイコンを押すと開きます</p>
+      <div class="folder-edit-actions"><button class="delete-action" id="deleteFolder" type="button">フォルダを解除</button><button class="primary-action" id="saveFolder" type="submit">変更を保存</button></div>
     </form>
   </dialog>
 

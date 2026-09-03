@@ -8,6 +8,8 @@
   --accent-contrast-rgb: 255 255 255;
   --widget-opacity: .82;
   --wallpaper-shade: .18;
+  --wallpaper-shade-top: .0864;
+  --wallpaper-shade-bottom: .0504;
   --grid-cols: 12;
   --grid-row: 78px;
   --grid-gap: 14px;
@@ -94,7 +96,7 @@ button { color: inherit; }
 .wallpaper-scrim {
   z-index: -1;
   background:
-    linear-gradient(180deg, rgb(0 0 0 / calc(var(--wallpaper-shade) * .48)), transparent 26%, rgb(0 0 0 / calc(var(--wallpaper-shade) * .28)) 76%),
+    linear-gradient(180deg, rgb(0 0 0 / var(--wallpaper-shade-top)), transparent 26%, rgb(0 0 0 / var(--wallpaper-shade-bottom)) 76%),
     rgb(0 0 0 / var(--wallpaper-shade));
 }
 
