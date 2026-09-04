@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Home Grid New Tab",
-  "version": "0.4.0",
-  "description": "時間割、天気、フォルダ、複数ページを自由に配置できるiPad・Liquid Glass風の新しいタブページです。",
+  "name": "NewTab",
+  "short_name": "NewTab",
+  "version": "0.5.0",
+  "description": "時間割、天気、イラスト検索、フォルダ、複数ページを自由に配置できるiPad風の新しいタブページです。",
   "permissions": [
     "geolocation"
   ],

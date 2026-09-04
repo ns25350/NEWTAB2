@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#8fb8ee">
-  <title>Home Grid</title>
+  <title>NewTab</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="features.css">
 </head>
@@ -92,6 +92,37 @@
         <button class="resize-handle" type="button" aria-label="天気の大きさを変更"><span></span></button>
       </article>
 
+      <article class="grid-item widget gallery-widget" data-key="gallery" hidden>
+        <div class="item-edit-chrome">
+          <button class="item-remove" type="button" data-hide-widget="gallery" aria-label="イラスト検索を非表示">×</button>
+          <button class="drag-grip" type="button" aria-label="イラスト検索を移動"><span></span></button>
+          <span class="size-badge">—</span>
+        </div>
+        <header class="gallery-header">
+          <div><span class="widget-kicker">ILLUSTRATION</span><h2>イラストを探す</h2></div>
+          <span class="gallery-safe-badge">セーフ検索</span>
+        </header>
+        <form class="gallery-search" id="gallerySearchForm" autocomplete="off">
+          <select id="galleryProvider" aria-label="検索先">
+            <option value="pixiv">pixiv</option>
+            <option value="x">X</option>
+            <option value="google">Google画像</option>
+          </select>
+          <input id="galleryQuery" type="search" maxlength="80" placeholder="タグや作家名で検索" aria-label="イラストの検索語">
+          <button type="submit" aria-label="イラストを検索">検索</button>
+        </form>
+        <div class="gallery-destinations">
+          <button class="gallery-destination pixiv-destination" id="openPixivRanking" type="button">
+            <span class="gallery-service-mark">P</span><span><strong>今日の人気</strong><small>pixiv 日間ランキング</small></span><i>›</i>
+          </button>
+          <button class="gallery-destination x-destination" id="openXIllustrations" type="button">
+            <span class="gallery-service-mark">𝕏</span><span><strong>話題のイラスト</strong><small>X・画像付き投稿</small></span><i>›</i>
+          </button>
+        </div>
+        <div class="gallery-recent" id="galleryRecent" aria-label="最近の検索"></div>
+        <button class="resize-handle" type="button" aria-label="イラスト検索の大きさを変更"><span></span></button>
+      </article>
+
     </section>
   </main>
 
@@ -107,7 +138,7 @@
 
   <dialog class="sheet settings-sheet" id="settingsDialog">
     <form class="sheet-panel" id="settingsForm">
-      <header class="sheet-header"><div><span class="sheet-kicker">HOME SCREEN</span><h2>設定</h2></div><button class="close-button" id="closeSettings" type="button" aria-label="設定を閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg></button></header>
+      <header class="sheet-header"><div><span class="sheet-kicker">NEWTAB</span><h2>設定</h2></div><button class="close-button" id="closeSettings" type="button" aria-label="設定を閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg></button></header>
 
       <section class="settings-card" id="gridSettingsSection">
         <div class="section-title"><div><h3>グリッドと配置</h3><p>マスの密度とホーム画面の構成を変更します。</p></div></div>
@@ -130,7 +161,7 @@
         <div class="wallpaper-actions"><label class="primary-action" for="wallpaperInput">画像を選ぶ</label><input id="wallpaperInput" type="file" accept="image/*" hidden><button class="secondary-action" id="removeWallpaper" type="button">壁紙を削除</button></div>
         <div class="setting-row"><div><h4>壁紙から色を自動生成</h4><p>画像の明るさと代表色を使用。</p></div><label class="switch"><input type="checkbox" id="autoTheme"><span></span></label></div>
         <fieldset class="manual-themes" id="manualThemes"><legend>手動テーマ</legend><label class="theme-choice silver"><input type="radio" name="manualTheme" value="silver"><span></span><small>Silver</small></label><label class="theme-choice ocean"><input type="radio" name="manualTheme" value="ocean"><span></span><small>Ocean</small></label><label class="theme-choice rose"><input type="radio" name="manualTheme" value="rose"><span></span><small>Rose</small></label><label class="theme-choice graphite"><input type="radio" name="manualTheme" value="graphite"><span></span><small>Dark</small></label></fieldset>
-        <label class="range-row" for="widgetOpacity"><span>標準の透明度</span><output id="widgetOpacityValue">82%</output></label><input class="range-input" id="widgetOpacity" type="range" min="52" max="96" step="1">
+        <label class="range-row" for="widgetOpacity"><span>ウィジェット背景の不透明度</span><output id="widgetOpacityValue">72%</output></label><input class="range-input" id="widgetOpacity" type="range" min="52" max="96" step="1">
         <label class="range-row" for="wallpaperShade"><span>壁紙の暗さ</span><output id="wallpaperShadeValue">18%</output></label><input class="range-input" id="wallpaperShade" type="range" min="0" max="55" step="1">
         <label class="range-row" for="motionStrength"><span>アニメーションの強さ</span><output id="motionStrengthValue">70%</output></label><input class="range-input" id="motionStrength" type="range" min="0" max="100" step="5">
       </section>
@@ -142,6 +173,7 @@
           <label><span>時計</span><span class="switch"><input type="checkbox" id="clockEnabled"><span></span></span></label>
           <label><span>時間割</span><span class="switch"><input type="checkbox" id="timetableEnabled"><span></span></span></label>
           <label><span>天気</span><span class="switch"><input type="checkbox" id="weatherEnabled"><span></span></span></label>
+          <label><span>イラスト検索</span><span class="switch"><input type="checkbox" id="galleryEnabled"><span></span></span></label>
         </div>
         <div class="two-fields"><div><label class="select-label" for="clockType">時計の種類</label><select id="clockType"><option value="digital">デジタル</option><option value="analog">アナログ</option></select></div><div class="setting-row inline-switch"><div><h4>24時間表示</h4></div><label class="switch"><input type="checkbox" id="clock24Hour"><span></span></label></div></div>
       </section>
@@ -172,10 +204,10 @@
 
       <section class="settings-card">
         <div class="section-title"><div><h3>ウィジェットごとの外観</h3><p>標準テーマから個別に上書きできます。</p></div></div>
-        <label class="select-label" for="styleTarget">対象</label><select id="styleTarget"><option value="search">検索</option><option value="clock">時計</option><option value="timetable">時間割</option><option value="weather">天気</option></select>
+        <label class="select-label" for="styleTarget">対象</label><select id="styleTarget"><option value="search">検索</option><option value="clock">時計</option><option value="timetable">時間割</option><option value="weather">天気</option><option value="gallery">イラスト検索</option></select>
         <div class="setting-row"><div><h4>個別設定を使用</h4></div><label class="switch"><input type="checkbox" id="customStyleEnabled"><span></span></label></div>
         <fieldset id="customStyleControls">
-          <label class="range-row" for="customOpacity"><span>透明度</span><output id="customOpacityValue">82%</output></label><input class="range-input" id="customOpacity" type="range" min="35" max="100">
+          <label class="range-row" for="customOpacity"><span>背景の不透明度</span><output id="customOpacityValue">82%</output></label><input class="range-input" id="customOpacity" type="range" min="35" max="100">
           <label class="range-row" for="customBlur"><span>ぼかし</span><output id="customBlurValue">28 px</output></label><input class="range-input" id="customBlur" type="range" min="0" max="48">
           <label class="range-row" for="customRadius"><span>角丸</span><output id="customRadiusValue">27 px</output></label><input class="range-input" id="customRadius" type="range" min="8" max="42">
           <label class="range-row" for="customShadow"><span>シャドウ</span><output id="customShadowValue">55%</output></label><input class="range-input" id="customShadow" type="range" min="0" max="100">

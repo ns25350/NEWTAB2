@@ -10,7 +10,7 @@ const TIMETABLE_CACHE_KEY = "homeGridTimetableCacheV3";
 const WEATHER_CACHE_KEY = "homeGridWeatherCacheV3";
 const WALLPAPER_DB = "home-grid-assets";
 const WALLPAPER_STORE = "wallpaper";
-const CORE_WIDGETS = ["search", "clock", "timetable", "weather"];
+const CORE_WIDGETS = ["search", "clock", "timetable", "weather", "gallery"];
 const MAX_PAGES = 6;
 
 const CLASS_LIST = [
@@ -57,11 +57,12 @@ const elements = Object.fromEntries([
   "homeStage", "homeGrid", "gridGhost", "searchForm", "searchInput", "suggestions", "digitalClock", "analogClock",
   "clockTime", "clockDate", "analogDate", "hourHand", "minuteHand", "secondHand", "timetableMeta", "timetableContent",
   "lessonNow", "refreshTimetable", "weatherLocation", "weatherContent", "refreshWeather",
+  "gallerySearchForm", "galleryProvider", "galleryQuery", "openPixivRanking", "openXIllustrations", "galleryRecent",
   "pageNavigation", "previousPage", "nextPage", "pageDots", "leftPageDrop", "rightPageDrop", "settingsDialog", "settingsForm", "closeSettings", "gridPresets",
   "gridColumns", "gridColumnsValue", "gridRowHeight", "gridRowHeightValue", "gridGap", "gridGapValue", "layoutTemplates",
   "newPageName", "addPageButton", "pageManager", "wallpaperInput", "removeWallpaper", "autoTheme", "manualThemes",
   "widgetOpacity", "widgetOpacityValue", "wallpaperShade", "wallpaperShadeValue", "motionStrength", "motionStrengthValue", "searchEnabled", "clockEnabled",
-  "timetableEnabled", "weatherEnabled", "clockType", "clock24Hour", "classSelect", "switchTime",
+  "timetableEnabled", "weatherEnabled", "galleryEnabled", "clockType", "clock24Hour", "classSelect", "switchTime",
   "lessonPreset", "periodEditor", "copyPresetToCustom", "weatherLocationInput", "searchWeatherLocation", "useCurrentLocation",
   "weatherSettingStatus", "searchEngine", "saveSearchHistory", "clearSearchHistory", "styleTarget", "customStyleEnabled", "customStyleControls", "customOpacity",
   "customOpacityValue", "customBlur", "customBlurValue", "customRadius", "customRadiusValue", "customShadow",
@@ -124,6 +125,7 @@ function createDefaultState() {
     clock: { enabled: true, type: "digital", is24Hour: true },
     timetable: { enabled: true, className: "101", switchTime: "16:00", lessonPreset: "50", customTimes: clone(LESSON_PRESETS["50"]) },
     weather: { enabled: true, locationName: "金沢市", latitude: 36.5613, longitude: 136.6562 },
+    gallery: { enabled: false, provider: "pixiv", recent: [] },
     shortcuts: DEFAULT_SHORTCUTS.map((item) => ({ ...item })),
     folders: [],
     pages: [{
@@ -170,6 +172,7 @@ function mergeV3(stored, defaults) {
     clock: { ...defaults.clock, ...(stored.clock || {}) },
     timetable: { ...defaults.timetable, ...(stored.timetable || {}) },
     weather: { ...defaults.weather, ...(stored.weather || {}) },
+    gallery: { ...defaults.gallery, ...(stored.gallery || {}) },
     widgetStyles: Object.fromEntries(CORE_WIDGETS.map((key) => [key, { ...defaults.widgetStyles[key], ...(stored.widgetStyles?.[key] || {}) }]))
   };
   merged.shortcuts = Array.isArray(stored.shortcuts) ? stored.shortcuts.filter(isStoredShortcut).map((item) => ({ ...item, folderId: item.folderId || "" })) : defaults.shortcuts;
@@ -200,6 +203,8 @@ function sanitizeState() {
   state.grid.rowHeight = clampNumber(state.grid.rowHeight, 56, 112, 78);
   state.grid.gap = clampNumber(state.grid.gap, 8, 24, 14);
   state.search.history = Array.isArray(state.search.history) ? state.search.history.filter((item) => typeof item === "string").slice(0, 8) : [];
+  state.gallery.provider = ["pixiv", "x", "google"].includes(state.gallery.provider) ? state.gallery.provider : "pixiv";
+  state.gallery.recent = Array.isArray(state.gallery.recent) ? state.gallery.recent.filter((item) => typeof item === "string" && item.trim()).slice(0, 8) : [];
   state.appearance.motionStrength = clampNumber(state.appearance.motionStrength, 0, 100, 70);
   delete state.agenda;
   state.timetable.lessonPreset = ["45", "50", "custom"].includes(state.timetable.lessonPreset) ? state.timetable.lessonPreset : "50";
@@ -269,13 +274,14 @@ function limitsFor(key) {
   const kind = itemKind(key);
   if (kind === "search") return { minW: Math.min(4, columns), maxW: columns, minH: 1, maxH: 2 };
   if (["clock", "weather"].includes(kind)) return { minW: Math.min(2, columns), maxW: columns, minH: 2, maxH: 7 };
+  if (kind === "gallery") return { minW: Math.min(4, columns), maxW: columns, minH: 2, maxH: 6 };
   if (kind === "timetable") return { minW: Math.min(3, columns), maxW: columns, minH: 2, maxH: 8 };
   return { minW: 1, maxW: Math.min(4, columns), minH: 1, maxH: 4 };
 }
 
 function defaultRectFor(key, page = activePage()) {
   const kind = itemKind(key);
-  const width = kind === "search" ? Math.min(8, state.grid.columns) : kind === "timetable" ? Math.min(8, state.grid.columns) : kind === "shortcut" || kind === "folder" ? Math.min(2, state.grid.columns) : Math.min(4, state.grid.columns);
+  const width = kind === "search" ? Math.min(8, state.grid.columns) : kind === "timetable" ? Math.min(8, state.grid.columns) : kind === "gallery" ? Math.min(6, state.grid.columns) : kind === "shortcut" || kind === "folder" ? Math.min(2, state.grid.columns) : Math.min(4, state.grid.columns);
   const height = kind === "search" ? 1 : kind === "shortcut" || kind === "folder" ? 2 : 3;
   return findOpenRect(width, height, page);
 }
@@ -372,6 +378,7 @@ function renderHome() {
   elements.editToolbar.hidden = !isEditing;
   elements.undoButton.disabled = !undoStack.length;
   applyWidgetStyles();
+  renderGallery();
   renderPageNavigation();
 }
 
@@ -468,7 +475,7 @@ function bindEvents() {
   elements.motionStrength.addEventListener("input", () => { state.appearance.motionStrength = Number(elements.motionStrength.value); elements.motionStrengthValue.textContent = `${state.appearance.motionStrength}%`; applyMotionSettings(); });
   elements.motionStrength.addEventListener("change", saveState);
 
-  [["search", elements.searchEnabled], ["clock", elements.clockEnabled], ["timetable", elements.timetableEnabled], ["weather", elements.weatherEnabled]].forEach(([key, input]) => input.addEventListener("change", () => setWidgetEnabled(key, input.checked)));
+  [["search", elements.searchEnabled], ["clock", elements.clockEnabled], ["timetable", elements.timetableEnabled], ["weather", elements.weatherEnabled], ["gallery", elements.galleryEnabled]].forEach(([key, input]) => input.addEventListener("change", () => setWidgetEnabled(key, input.checked)));
   elements.clockType.addEventListener("change", () => { state.clock.type = elements.clockType.value; saveState(); updateClockMode(); });
   elements.clock24Hour.addEventListener("change", () => { state.clock.is24Hour = elements.clock24Hour.checked; saveState(); updateClock(); });
   elements.classSelect.addEventListener("change", () => { state.timetable.className = elements.classSelect.value; saveState(); renderTimetable(); });
@@ -481,6 +488,12 @@ function bindEvents() {
   elements.weatherLocationInput.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); setWeatherLocationFromName(); } });
   elements.useCurrentLocation.addEventListener("click", setWeatherFromCurrentLocation);
   elements.refreshWeather.addEventListener("click", () => fetchWeather(true));
+
+  elements.gallerySearchForm.addEventListener("submit", performGallerySearch);
+  elements.galleryProvider.addEventListener("change", () => { state.gallery.provider = elements.galleryProvider.value; saveState(); });
+  elements.openPixivRanking.addEventListener("click", () => openGalleryDestination("pixiv-ranking"));
+  elements.openXIllustrations.addEventListener("click", () => openGalleryDestination("x-popular"));
+  elements.galleryRecent.addEventListener("click", handleGalleryRecentClick);
 
   elements.searchEngine.addEventListener("change", () => { state.search.engine = elements.searchEngine.value; saveState(); });
   elements.saveSearchHistory.addEventListener("change", () => { state.search.saveHistory = elements.saveSearchHistory.checked; if (!state.search.saveHistory) state.search.history = []; saveState(); });
@@ -1121,6 +1134,7 @@ function syncSettingsControls() {
   elements.clockEnabled.checked = state.clock.enabled;
   elements.timetableEnabled.checked = state.timetable.enabled;
   elements.weatherEnabled.checked = state.weather.enabled;
+  elements.galleryEnabled.checked = state.gallery.enabled;
   elements.clockType.value = state.clock.type;
   elements.clock24Hour.checked = state.clock.is24Hour;
   elements.classSelect.value = state.timetable.className;
@@ -1156,7 +1170,7 @@ function applyWidgetStyles() {
     const computed = getComputedStyle(document.documentElement);
     const text = style.enabled ? hexToRgb(style.text) : computed.getPropertyValue("--text-rgb").trim();
     const accent = style.enabled ? hexToRgb(style.accent) : computed.getPropertyValue("--accent-rgb").trim();
-    item.style.setProperty("--item-opacity", String((style.enabled ? style.opacity : state.appearance.widgetOpacity) / 100));
+    item.style.setProperty("--item-bg-opacity", String((style.enabled ? style.opacity : state.appearance.widgetOpacity) / 100));
     item.style.setProperty("--item-blur", `${style.enabled ? style.blur : 28}px`);
     item.style.setProperty("--item-radius", `${style.enabled ? style.radius : 27}px`);
     item.style.setProperty("--item-shadow", String((style.enabled ? style.shadow : 55) / 290));
@@ -1343,6 +1357,50 @@ function normalizeUrl(input) {
 function faviconUrl(url) { return `https://www.google.com/s2/favicons?domain_url=${encodeURIComponent(url)}&sz=128`; }
 function safeColor(value) { return /^#[0-9a-f]{6}$/i.test(value || "") ? value : "#3478f6"; }
 function firstCharacter(value) { return [...(value.trim() || "?")][0].toLocaleUpperCase("ja-JP"); }
+
+function gallerySearchUrl(provider, query) {
+  const value = String(query || "").trim();
+  if (provider === "x") {
+    const xQuery = `${value} filter:images filter:safe -filter:replies`;
+    return `https://x.com/search?q=${encodeURIComponent(xQuery)}&src=typed_query&f=top`;
+  }
+  if (provider === "google") return `https://www.google.com/search?tbm=isch&safe=active&q=${encodeURIComponent(`${value} イラスト`)}`;
+  return `https://www.pixiv.net/tags/${encodeURIComponent(value)}/artworks`;
+}
+
+function performGallerySearch(event) {
+  event?.preventDefault();
+  const query = elements.galleryQuery.value.trim();
+  if (!query) return showToast("検索するタグや作家名を入力してください");
+  state.gallery.provider = elements.galleryProvider.value;
+  state.gallery.recent = [query, ...state.gallery.recent.filter((item) => item !== query)].slice(0, 8);
+  saveState();
+  renderGallery();
+  window.location.href = gallerySearchUrl(state.gallery.provider, query);
+}
+
+function openGalleryDestination(destination) {
+  const urls = {
+    "pixiv-ranking": "https://www.pixiv.net/ranking.php?mode=daily&content=illust",
+    "x-popular": `https://x.com/search?q=${encodeURIComponent("#イラスト filter:images filter:safe -filter:replies")}&src=typed_query&f=top`
+  };
+  if (urls[destination]) window.location.href = urls[destination];
+}
+
+function renderGallery() {
+  if (!elements.galleryRecent) return;
+  elements.galleryProvider.value = state.gallery.provider;
+  const queries = state.gallery.recent.length ? state.gallery.recent : ["オリジナル", "風景", "ファンタジー", "キャラクターデザイン"];
+  const label = state.gallery.recent.length ? "最近" : "おすすめ";
+  elements.galleryRecent.innerHTML = `<span>${label}</span>${queries.slice(0, 6).map((query) => `<button type="button" data-gallery-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join("")}`;
+}
+
+function handleGalleryRecentClick(event) {
+  const button = event.target.closest("[data-gallery-query]");
+  if (!button) return;
+  elements.galleryQuery.value = button.dataset.galleryQuery;
+  performGallerySearch();
+}
 
 function handleSearchSubmit(event) {
   event.preventDefault();
