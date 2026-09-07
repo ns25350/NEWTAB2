@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "NewTab",
+  "short_name": "NewTab",
+  "version": "1.0.0",
+  "minimum_chrome_version": "121",
+  "description": "時間割、天気、イラスト検索、フォルダ、複数ページを自由に配置できるiPad風の新しいタブページです。",
+  "permissions": [
+    "geolocation"
+  ],
+  "host_permissions": [
+    "https://suggestqueries.google.com/*",
+    "https://www.google.com/complete/search*",
+    "https://johou7-275be-default-rtdb.firebaseio.com/*",
+    "https://api.open-meteo.com/*",
+    "https://geocoding-api.open-meteo.com/*"
+  ],
+  "chrome_url_overrides": {
+    "newtab": "index.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  },
+  "incognito": "split"
+}
